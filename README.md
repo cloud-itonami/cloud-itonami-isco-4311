@@ -1,18 +1,29 @@
 # cloud-itonami-isco-4311
 
-Open Business Blueprint for **ISCO-08 4311**: Accounting and Bookkeeping Clerks — an ISCO
-**Wave 0 (cognitive substrate)** occupation per the reverse-toposort
-rollout plan (ADR-2607121000): pure-cognitive work, the LLM-first wave,
-with **no robotics gate** — eligible for actor implementation now.
+**Community Bookkeeping Service** — the ISCO-08 4311 (Accounting and
+Bookkeeping Clerks) actor, an ISCO **Wave 0 (cognitive substrate)**
+occupation per ADR-2607121000: pure-cognitive work, the LLM-first
+wave, no robotics gate.
 
-**Maturity: `:blueprint`** — this repository publishes the business
-blueprint only; **no actor implementation yet**, and none is claimed.
-The implemented actor will follow the fleet-standard pattern
-(advisor-LLM sealed behind the independent `:bookkeeping-clerks-governor`
-governor, human approval workflow, append-only audit ledger — same
-shape as cloud-itonami-isco-2411's accounting practice).
+**Maturity: `:implemented`** — BookkeepingAdvisor ⊣
+BookkeepingClerksGovernor as a langgraph StateGraph
+(`intake → advise → govern → decide → commit/hold`, human-approval
+interrupt for escalations), modeled on cloud-itonami-isco-2411's
+accounting actor. 14 tests / 36 assertions green.
+
+Two bookkeeping-specific HARD invariants (never approvable past):
+
+1. **Source-document basis** — a journal-entry draft must cite a
+   REGISTERED source document belonging to the same client. A journal
+   entry without a source document is an invented transaction (the
+   fleet's fabricated-spec-basis rule, bookkeeping edition).
+2. **Double-entry balance** — debit total must equal credit total.
+   A human approver cannot approve their way past bad arithmetic.
+
+Escalations (always human sign-off): `:issue-invoice` (external-send),
+`:close-period` (hard to reverse), low confidence (< 0.6). The advisor
+only ever proposes (`:effect :propose`); every `commit-record!` is
+gated behind the governor's verdict.
 
 AGPL-3.0-or-later, forkable by any qualified operator. Part of the
-[cloud-itonami](https://itonami.cloud) open business fleet
-(labor-transition context: ADR-2607122100 — ISCO wave-0 agentization
-is marketed through the 7810 labour-exchange lane).
+[cloud-itonami](https://itonami.cloud) open business fleet.
