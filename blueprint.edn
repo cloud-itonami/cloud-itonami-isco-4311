@@ -1,0 +1,11 @@
+[{:itonami.blueprint/id "cloud-itonami-isco-4311"
+  :itonami.blueprint/name "Community Bookkeeping Service"
+  :itonami.blueprint/isco-08 "4311"
+  :itonami.blueprint/domain :finance/bookkeeping
+  :itonami.blueprint/license "AGPL-3.0-or-later"
+  :itonami.blueprint/social-impact [:small-business-support :financial-transparency :local-jobs]
+  :itonami.blueprint/governor :bookkeeping-clerks-governor
+  :itonami.blueprint/robotics true
+  :itonami.blueprint/required-technologies [:robotics :identity :forms :dmn :bpmn :audit-ledger]
+  :itonami.blueprint/status :public-oss
+  :db/id -1}]
