@@ -1,0 +1,66 @@
+<html><head><meta charset="utf-8"><title>cloud-itonami-isco-4311 &middot; community bookkeeping</title><style>
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.ok { color: #137a3f; }
+body { font-family: system-ui,-apple-system,sans-serif; margin: 0; color: #1a1a1a; background: #fafafa; }
+header.bar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: #fff; border-bottom: 1px solid #e5e5e5; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+h2 { margin-top: 0; font-size: 15px; }
+.warn { color: #b25c00; background: #fff8e1; padding: 2px 6px; border-radius: 4px; }
+main { max-width: 980px; margin: 24px auto; padding: 0 20px; }
+header.bar h1 { font-size: 18px; margin: 0; font-weight: 600; }
+.muted { color: #888; font-size: 13px; }
+.critical { color: #fff; background: #b3261e; padding: 2px 6px; border-radius: 4px; font-weight: 600; }
+.card { background: #fff; border: 1px solid #e5e5e5; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+.err { color: #b3261e; background: #fbe9e7; padding: 2px 6px; border-radius: 4px; }
+th { font-weight: 600; color: #555; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+header.bar .badge { margin-left: auto; font-size: 12px; color: #666; }
+code { font-size: 12px; background: #f4f4f4; padding: 1px 4px; border-radius: 3px; }
+</style></head><body>
+<header class="bar">
+  <h1>Community Bookkeeping (ISCO-08 4311) — Operator Console</h1>
+  <span class="badge">read-only sample · governor-gated · invoices &amp; period close always human-approved</span>
+</header>
+<main>
+  <section class="card">
+    <h2>Registered clients &amp; source documents</h2>
+    <p class="muted">Demo snapshot — build-time-generated from <code>bookkeeping.store</code> via <code>bookkeeping.render-html</code> (<code>clojure -M:render-html</code>), regenerated nightly. Every journal-entry draft must cite one of these registered source documents — a journal entry without one is an invented transaction.</p>
+    <table>
+      <thead><tr><th>Client</th><th>Source doc</th><th>Kind</th><th>Records</th><th>Last op status</th></tr></thead>
+      <tbody>
+        <tr><td>client-1</td><td><code>doc-1</code></td><td>receipt</td><td>1</td><td><span class="critical">HARD hold &middot; source-doc-wrong-client</span></td></tr>
+        <tr><td>client-2</td><td><code>doc-2</code></td><td>invoice-received</td><td>1</td><td><span class="ok">committed</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>Action gate (Bookkeeping Clerks Governor)</h2>
+    <p class="muted">HARD holds cannot be overridden. A human approver cannot approve their way past bad double-entry arithmetic.</p>
+    <table>
+      <thead><tr><th>Op</th><th>Gate</th></tr></thead>
+      <tbody>
+        <tr><td><code>:draft-entry</code></td><td><span class="ok">auto-commit when a registered source document is cited and debits equal credits</span></td></tr>
+        <tr><td><code>:issue-invoice</code></td><td><span class="warn">ALWAYS human approval &middot; external-send to a counterparty</span></td></tr>
+        <tr><td><code>:close-period</code></td><td><span class="warn">ALWAYS human approval &middot; hard-to-reverse bookkeeping act</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>Audit trail (this run)</h2>
+    <p class="muted">Every request this scenario drove through the real compiled graph, in order — thread-id, client, op, the request's own source document, and the real disposition (auto-commit, approved-after-escalation, or the specific HARD-hold rule).</p>
+    <table>
+      <thead><tr><th>Thread</th><th>Client</th><th>Op</th><th>Source doc</th><th>Disposition</th></tr></thead>
+      <tbody>
+        <tr><td><code>c1-draft-balanced</code></td><td>client-1</td><td><code>draft-entry</code></td><td>doc-1</td><td><span class="ok">committed</span></td></tr>
+        <tr><td><code>c1-draft-no-source</code></td><td>client-1</td><td><code>draft-entry</code></td><td></td><td><span class="critical">HARD hold &middot; no-source-doc</span></td></tr>
+        <tr><td><code>c1-draft-unknown-doc</code></td><td>client-1</td><td><code>draft-entry</code></td><td>doc-999</td><td><span class="critical">HARD hold &middot; unknown-source-doc</span></td></tr>
+        <tr><td><code>c1-draft-unbalanced</code></td><td>client-1</td><td><code>draft-entry</code></td><td>doc-1</td><td><span class="critical">HARD hold &middot; unbalanced-entry</span></td></tr>
+        <tr><td><code>ghost-no-client</code></td><td>client-ghost</td><td><code>draft-entry</code></td><td>doc-1</td><td><span class="critical">HARD hold &middot; no-client</span></td></tr>
+        <tr><td><code>c2-draft-wrong-doc</code></td><td>client-2</td><td><code>draft-entry</code></td><td>doc-1</td><td><span class="critical">HARD hold &middot; source-doc-wrong-client</span></td></tr>
+        <tr><td><code>c2-draft-own-doc</code></td><td>client-2</td><td><code>draft-entry</code></td><td>doc-2</td><td><span class="ok">committed</span></td></tr>
+        <tr><td><code>c1-issue-invoice</code></td><td>client-1</td><td><code>issue-invoice</code></td><td></td><td><span class="ok">approved &amp; committed</span></td></tr>
+        <tr><td><code>c1-close-period</code></td><td>client-1</td><td><code>close-period</code></td><td></td><td><span class="ok">approved &amp; committed</span></td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+</body></html>
