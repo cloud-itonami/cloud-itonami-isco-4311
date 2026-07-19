@@ -5,4 +5,7 @@
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
                       {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
-         :main-opts ["-m" "cognitect.test-runner"]}}}
+         :main-opts ["-m" "cognitect.test-runner"]}
+  ;; clojure -M:render-html [out-file] -> regenerate docs/samples/operator-console.html
+  ;; through the real actor (flagship checklist item 2, ADR-2607189300, ISCO cluster).
+  :render-html {:main-opts ["-m" "bookkeeping.render-html"]}}}
