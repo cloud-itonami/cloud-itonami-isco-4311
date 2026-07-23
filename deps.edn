@@ -8,4 +8,8 @@
          :main-opts ["-m" "cognitect.test-runner"]}
   ;; clojure -M:render-html [out-file] -> regenerate docs/samples/operator-console.html
   ;; through the real actor (flagship checklist item 2, ADR-2607189300, ISCO cluster).
-  :render-html {:main-opts ["-m" "bookkeeping.render-html"]}}}
+  :render-html {:main-opts ["-m" "bookkeeping.render-html"]}
+  :lint {:replace-deps {clj-kondo/clj-kondo {:mvn/version "2024.11.14"}}
+         :main-opts    ["-m" "clj-kondo.main"
+                        "--lint" "src" "test"
+                        "--fail-level" "error"]}}}
