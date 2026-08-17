@@ -10,10 +10,17 @@ io.github.kotoba-lang/langgraph
         io.github.kotoba-lang/governor
         {:git/url "https://github.com/kotoba-lang/governor.git"
          :git/sha "90a2944e617e58b9c90314b7e84b003ec3ea0c1f"}
-        ;; what a tax record must carry, by jurisdiction. Sibling path per
-        ;; the fleet's capability-library-wrapping convention.
+        ;; what a tax record must carry, by jurisdiction.
+        ;;
+        ;; A GIT dep, not a sibling path. Measured 2026-08-17: taxlaw has no
+        ;; :local/root deps of its own, so it is consumable as one -- and
+        ;; that is what makes this repo forkable for real (its README claims
+        ;; "forkable by any qualified operator", which a sibling path
+        ;; quietly makes false) and gateable on the murakumo fleet, which
+        ;; ships one repo's tree and no siblings.
         io.github.kotoba-lang/taxlaw
-        {:local/root "../../kotoba-lang/taxlaw"}}
+        {:git/url "https://github.com/kotoba-lang/taxlaw.git"
+         :git/sha "718b09ea4fd608dc3a12d0baaa095588046a2e5c"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
