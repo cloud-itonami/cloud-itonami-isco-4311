@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 26 tests / 130 assertions green.
+accounting actor. 30 tests / 175 assertions green.
 
 Four bookkeeping-specific HARD invariants (never approvable past):
 
@@ -60,6 +60,23 @@ Two candidate sources were **dropped rather than cited**: `asb.or.jp`
 client; 200 only with a spoofed browser User-Agent). Both are recorded
 in `:catalog/rejected` with the reason. An unfetchable citation is not
 a citation.
+
+## The shared governor layer
+
+The four rules that are not about bookkeeping at all — `:no-client`,
+`:no-actuation`, `:unknown-source-doc`, `:source-doc-wrong-client` — and
+the verdict assembly now come from
+[`kotoba-lang/governor`](https://github.com/kotoba-lang/governor) rather
+than being hand-copied. That library surveyed 376 governors in this fleet
+and found one that had silently drifted into reporting a HARD violation as
+escalatable, inviting an approver to try to wave through something no
+approval can pass.
+
+`test/bookkeeping/conformance_test.clj` pins every disposition this actor
+can reach against `gov/conformance-failures`. **Measured: re-injecting that
+exact drift leaves all 26 pre-existing tests green and reddens only the
+conformance suite** — which is why the drift survived elsewhere, and why
+this suite is the one that had to exist.
 
 Escalations (always human sign-off): `:issue-invoice` (external-send),
 `:close-period` (hard to reverse), low confidence (< 0.6). The advisor
