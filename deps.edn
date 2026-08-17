@@ -20,7 +20,14 @@ io.github.kotoba-lang/langgraph
         ;; ships one repo's tree and no siblings.
         io.github.kotoba-lang/taxlaw
         {:git/url "https://github.com/kotoba-lang/taxlaw.git"
-         :git/sha "718b09ea4fd608dc3a12d0baaa095588046a2e5c"}}
+         :git/sha "718b09ea4fd608dc3a12d0baaa095588046a2e5c"}
+        ;; the double-entry contract this workspace already has. kakeibo
+        ;; projects personal statement rows onto it; bookkeeping.posting
+        ;; projects journal entries onto the same thing, so an approved
+        ;; entry has a destination and balance is checked in one place.
+        io.github.kotoba-lang/banking
+        {:git/url "https://github.com/kotoba-lang/banking.git"
+         :git/sha "b8750ad17d16c012c7de62d4bf785973464495cc"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner

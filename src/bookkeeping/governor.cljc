@@ -73,13 +73,12 @@
   record already read."
   (:require [bookkeeping.store :as store]
             [kotoba.taxlaw :as taxlaw]
+            [bookkeeping.posting :as posting]
             [governor.core :as gov]))
 
 (def confidence-floor 0.6)
 (def ^:private escalating-ops #{:issue-invoice :close-period})
 
-(defn- line-total [lines side]
-  (transduce (comp (filter #(= side (:side %))) (map :amount)) + 0 lines))
 
 (defn- claims-input-tax-credit? [proposal]
   (= :input-tax-credit (:tax-treatment proposal)))
@@ -127,10 +126,15 @@
        (and draft? (nil? (:source-doc proposal)))
        (conj {:rule :no-source-doc :detail "仕訳 draft は原始証憑の引用が必須（取引の捏造禁止）"})
 
-       (and draft? (not= (line-total lines :dr) (line-total lines :cr)))
+       ;; Balance is `kotoba-lang/banking`'s question, not this actor's. It
+      ;; groups by currency before comparing; the hand-rolled check that was
+      ;; here summed :amount across every line regardless of :currency, so
+      ;; 5000 JPY debit against 5000 USD credit BALANCED. See
+      ;; bookkeeping.posting.
+      (and draft? (not (posting/balanced? lines)))
       (conj {:rule :unbalanced-entry
-             :detail (str "借方合計 " (line-total lines :dr)
-                          " ≠ 貸方合計 " (line-total lines :cr))})
+             :detail (str "貸借が一致しない（通貨ごとに検査）: "
+                          (pr-str (mapv (juxt :side :amount :currency) lines)))})
 
       ;; 5. the claim is made in a jurisdiction nobody has catalogued.
       (= :none (:taxlaw/coverage support))
