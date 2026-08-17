@@ -43,6 +43,14 @@
   invent a tax position in order to have one to check, and widening these
   to every entry would be a separate decision with its own evidence.
 
+  The jurisdiction rules are NOT this actor's either. They moved to
+  `kotoba-lang/taxlaw` when a second actor needed the same law: 4311 checks
+  the RECEIVING side of インボイス制度 (a journal entry claiming 仕入税額控除
+  must cite a document carrying a valid registration number) and `tehai` the
+  ISSUING side. taxlaw verifies its citations against the e-Gov corpus —
+  existence, non-repeal and title — which the local catalog's HTTP-200 check
+  could not do.
+
   ## What is this actor's, and what is the fleet's
 
   Four of the rules below are not bookkeeping rules at all — every actor in
@@ -64,7 +72,7 @@
   library holds no store and no domain wording by design; it is handed the
   record already read."
   (:require [bookkeeping.store :as store]
-            [bookkeeping.jurisdictions :as law]
+            [kotoba.taxlaw :as taxlaw]
             [governor.core :as gov]))
 
 (def confidence-floor 0.6)
@@ -84,7 +92,10 @@
         ;; whose rules it satisfies.
         juris (:jurisdiction client-record)
         tax-claim? (claims-input-tax-credit? proposal)
-        covered? (law/covered? juris)]
+        ;; `credit-support` answers in three values, not two: :none means
+        ;; nobody catalogued this jurisdiction, which is neither a pass nor
+        ;; a refusal. The two rules below split on exactly that.
+        support (when tax-claim? (taxlaw/credit-support juris doc-record))]
     (gov/violations
      ;; --- the fleet's four, from kotoba-lang/governor -------------------
      (gov/missing-subject client-record {:detail "未登録 client"})
@@ -114,23 +125,21 @@
                           " ≠ 貸方合計 " (line-total lines :cr))})
 
       ;; 5. the claim is made in a jurisdiction nobody has catalogued.
-      (and tax-claim? (not covered?))
+      (= :none (:taxlaw/coverage support))
       (conj {:rule :unchecked-jurisdiction
              :detail (str "仕入税額控除を主張しているが、法域 "
                           (pr-str juris)
-                          " は bookkeeping.jurisdictions に無い（未検査は合格ではない）")})
+                          " は kotoba.taxlaw に無い（未検査は合格ではない）")})
 
-      ;; 6. the jurisdiction IS catalogued and conditions the credit on a
-      ;; qualified invoice — so the cited document must carry a valid
-      ;; registration number.
-      (and tax-claim? covered?
-           (law/requires-qualified-invoice? juris)
-           (not (law/registration-number-valid?
-                 juris (:registration-number doc-record))))
-       (conj {:rule :invalid-registration-number
-              :detail (str "仕入税額控除には適格請求書発行事業者の登録番号が要る。"
-                           "証憑 " (pr-str (:source-doc proposal)) " の登録番号: "
-                           (pr-str (:registration-number doc-record)))})))))
+      ;; 6. the jurisdiction IS catalogued and this document does not
+      ;; support the credit under it.
+      (and (= :checked (:taxlaw/coverage support))
+           (false? (:taxlaw/supported? support)))
+      (conj {:rule :invalid-registration-number
+             :detail (str "仕入税額控除には適格請求書発行事業者の登録番号が要る（"
+                          (name (:taxlaw/reason support)) "）。証憑 "
+                          (pr-str (:source-doc proposal)) " の登録番号: "
+                          (pr-str (:registration-number doc-record)))})))))
 
 (defn check
   "Assess a proposal against `request`/`context`/`proposal` and a

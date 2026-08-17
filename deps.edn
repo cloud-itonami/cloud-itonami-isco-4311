@@ -9,7 +9,11 @@ io.github.kotoba-lang/langgraph
         ;; the four rules and the verdict assembly every actor shares.
         io.github.kotoba-lang/governor
         {:git/url "https://github.com/kotoba-lang/governor.git"
-         :git/sha "90a2944e617e58b9c90314b7e84b003ec3ea0c1f"}}
+         :git/sha "90a2944e617e58b9c90314b7e84b003ec3ea0c1f"}
+        ;; what a tax record must carry, by jurisdiction. Sibling path per
+        ;; the fleet's capability-library-wrapping convention.
+        io.github.kotoba-lang/taxlaw
+        {:local/root "../../kotoba-lang/taxlaw"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
