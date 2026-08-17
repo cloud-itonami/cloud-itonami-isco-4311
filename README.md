@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 34 tests / 115 assertions green.
+accounting actor. 42 tests / 138 assertions green.
 
 Five bookkeeping-specific HARD invariants (never approvable past):
 
@@ -40,6 +40,38 @@ Five bookkeeping-specific HARD invariants (never approvable past):
 Invariants 3 and 4 fire **only** on a proposal that claims the credit;
 an entry with no tax claim is unaffected. The actor does not invent a
 tax position in order to have one to check.
+
+## Where an approved entry goes
+
+Until `bookkeeping.posting` existed, this actor could refuse a bad journal
+entry and approve a good one, and the good one went nowhere. `:lines` was a
+private shape read by one function in the governor and by nothing else in
+the fleet — an approved entry was a decision with no destination.
+
+It now projects onto [`kotoba-lang/banking`](https://github.com/kotoba-lang/banking),
+the double-entry contract this workspace already had, and which
+[`kotoba-lang/kakeibo`](https://github.com/kotoba-lang/kakeibo) was already
+using for personal statement rows:
+
+```text
+kakeibo     statement rows  ─┐
+                             ├─▶  kotoba.banking   double-entry postings
+bookkeeping journal entries ─┘
+```
+
+### What that exposed
+
+`banking/balanced?` groups by currency before comparing debits to credits.
+The check it replaced did not — it summed `:amount` across every line
+regardless of `:currency`, so **an entry with 5000 debit in JPY and 5000
+credit in USD balanced.** Invariant 2 says a human cannot approve their way
+past bad arithmetic; that arithmetic was wrong in the one direction the
+invariant exists to catch. It is now held. The fix arrived as a consequence
+of using the shared contract rather than as a patch to a private one.
+
+Lines carrying no `:currency` all group under `nil` together, so a
+single-currency ledger sees no change — measured: the 34 pre-existing tests
+are green before and after.
 
 ## The jurisdiction catalog moved out
 
