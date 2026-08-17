@@ -95,7 +95,15 @@
         ;; `credit-support` answers in three values, not two: :none means
         ;; nobody catalogued this jurisdiction, which is neither a pass nor
         ;; a refusal. The two rules below split on exactly that.
-        support (when tax-claim? (taxlaw/credit-support juris doc-record))]
+        support (when tax-claim? (taxlaw/credit-support juris doc-record))
+        ;; 電子帳簿保存法 第七条: where a transaction was conducted
+        ;; electronically, the obligation is to preserve the 電磁的記録
+        ;; itself — printing it and keeping the paper is not that. This one
+        ;; is NOT scoped to a tax claim: the article binds the 保存義務者
+        ;; whenever an 電子取引 happened, not only when a credit is being
+        ;; claimed for it.
+        preservation (when (and draft? doc-record)
+                       (taxlaw/record-preservation juris doc-record))]
     (gov/violations
      ;; --- the fleet's four, from kotoba-lang/governor -------------------
      (gov/missing-subject client-record {:detail "未登録 client"})
@@ -139,7 +147,17 @@
              :detail (str "仕入税額控除には適格請求書発行事業者の登録番号が要る（"
                           (name (:taxlaw/reason support)) "）。証憑 "
                           (pr-str (:source-doc proposal)) " の登録番号: "
-                          (pr-str (:registration-number doc-record)))})))))
+                          (pr-str (:registration-number doc-record)))})
+
+      ;; 7. an electronic transaction kept only on paper.
+      (and (= :checked (:taxlaw/coverage preservation))
+           (false? (:taxlaw/preserved? preservation)))
+      (conj {:rule :electronic-record-not-preserved
+             :detail (str (:taxlaw/provision preservation)
+                          "（" (name (:taxlaw/reason preservation)) "）: 証憑 "
+                          (pr-str (:source-doc proposal))
+                          " は電子取引だが電磁的記録として保存されていない: "
+                          (pr-str (:preservation doc-record)))})))))
 
 (defn check
   "Assess a proposal against `request`/`context`/`proposal` and a
@@ -151,7 +169,23 @@
         doc-record (some->> (:source-doc proposal) (store/source-doc store))
         hard (hard-violations {:request request :proposal proposal}
                               client-record doc-record)]
-    (gov/verdict {:violations hard
-                  :confidence (:confidence proposal)
-                  :escalating-op? (contains? escalating-ops (:op proposal))
-                  :confidence-floor confidence-floor})))
+    (gov/verdict
+     {:violations hard
+      :confidence (:confidence proposal)
+      :escalating-op? (contains? escalating-ops (:op proposal))
+      :confidence-floor confidence-floor
+      ;; What taxlaw was and was NOT able to say. A document that declares
+      ;; no `:origin` is not held — it has asserted nothing — but the
+      ;; verdict says so rather than letting `nobody looked` and `we looked
+      ;; and it was fine` produce the same output. Same device as kintai's
+      ;; `:unevaluated` and tehai's `:tax`.
+      :extra {:tax (when (and (= :draft-entry (:op proposal))
+                              (some->> (:source-doc proposal)
+                                       (store/source-doc store)))
+                     {:credit (when (= :input-tax-credit (:tax-treatment proposal))
+                                (taxlaw/credit-support
+                                 (:jurisdiction client-record)
+                                 (store/source-doc store (:source-doc proposal))))
+                      :preservation (taxlaw/record-preservation
+                                     (:jurisdiction client-record)
+                                     (store/source-doc store (:source-doc proposal)))})}})))
