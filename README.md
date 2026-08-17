@@ -9,9 +9,9 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 14 tests / 36 assertions green.
+accounting actor. 26 tests / 130 assertions green.
 
-Two bookkeeping-specific HARD invariants (never approvable past):
+Four bookkeeping-specific HARD invariants (never approvable past):
 
 1. **Source-document basis** — a journal-entry draft must cite a
    REGISTERED source document belonging to the same client. A journal
@@ -19,6 +19,47 @@ Two bookkeeping-specific HARD invariants (never approvable past):
    fleet's fabricated-spec-basis rule, bookkeeping edition).
 2. **Double-entry balance** — debit total must equal credit total.
    A human approver cannot approve their way past bad arithmetic.
+3. **Checked jurisdiction** — a proposal claiming 仕入税額控除
+   (`:tax-treatment :input-tax-credit`) whose client's jurisdiction is
+   not in `bookkeeping.jurisdictions` is HELD. **An unchecked
+   jurisdiction is a hold, not a pass** — including an undeclared one,
+   which is unchecked rather than domestic-by-default.
+4. **Qualified invoice** — where the jurisdiction conditions that credit
+   on a 適格請求書, the cited source document must carry a registration
+   number in that jurisdiction's format (JP: `T` + 13 digits). A receipt
+   silent about its registration number does not become creditable by
+   being silent.
+
+Invariants 3 and 4 fire **only** on a proposal that claims the credit;
+an entry with no tax claim is unaffected. The actor does not invent a
+tax position in order to have one to check.
+
+## The jurisdiction catalog
+
+`src/bookkeeping/jurisdictions.cljc` holds the primary sources — e-Gov
+法令検索 for 電子帳簿保存法 / 消費税法 / 法人税法 / 所得税法 / 会社法 /
+会社計算規則 / 商法, and 国税庁 for インボイス制度, 仕入税額控除,
+帳簿書類等の保存期間, e-Tax. It is **data the governor reads**, not a
+reading list: invariants 3 and 4 above resolve against it.
+
+Two things are kept apart on purpose, because conflating them is how a
+citation list becomes decoration:
+
+- **reachability** — all 15 URLs answered HTTP 200 on 2026-08-17.
+  Re-check any time: `nbb tools/verify_citations.cljs` (exit `0` clean,
+  `1` a citation went bad, `2` the run could not answer — an empty scan
+  is never reported as clean).
+- **content** — verified for exactly one claim, the registration-number
+  format, read off the NTA's own publication site. Every other entry
+  cites the instrument without quoting article text and is marked
+  `:rule/review :reachable-not-read`. **This actor renders no tax or
+  accounting opinion**, and neither does the catalog.
+
+Two candidate sources were **dropped rather than cited**: `asb.or.jp`
+(connection timed out) and 中小企業の会計に関する基本要領 (403 to a plain
+client; 200 only with a spoofed browser User-Agent). Both are recorded
+in `:catalog/rejected` with the reason. An unfetchable citation is not
+a citation.
 
 Escalations (always human sign-off): `:issue-invoice` (external-send),
 `:close-period` (hard to reverse), low confidence (< 0.6). The advisor

@@ -21,11 +21,29 @@
                              its credit total. An unbalanced entry is
                              structurally wrong; a human approver cannot
                              approve their way past bad arithmetic.
+    5. checked jurisdiction — a proposal CLAIMING a tax consequence
+                             (:tax-treatment :input-tax-credit) in a
+                             jurisdiction `bookkeeping.jurisdictions` does
+                             not cover is HELD. An unchecked jurisdiction
+                             is a hold, not a pass (kintai's
+                             :unchecked-law, bookkeeping edition).
+    6. qualified invoice   — where the jurisdiction conditions input-tax
+                             credit on a qualified invoice, the cited
+                             source document must carry a registration
+                             number in that jurisdiction's format. A
+                             missing number is not a zero-rated entry;
+                             it is an unanswered question.
   ESCALATION invariants (:escalate? true, human sign-off):
-    5. :op :issue-invoice  (external-send to a counterparty).
-    6. :op :close-period   (hard-to-reverse bookkeeping act).
-    7. low confidence (< `confidence-floor`)."
-  (:require [bookkeeping.store :as store]))
+    7. :op :issue-invoice  (external-send to a counterparty).
+    8. :op :close-period   (hard-to-reverse bookkeeping act).
+    9. low confidence (< `confidence-floor`).
+
+  Checks 5 and 6 fire ONLY on a proposal that claims the credit. A
+  bookkeeping entry with no tax claim is unaffected — the actor does not
+  invent a tax position in order to have one to check, and widening these
+  to every entry would be a separate decision with its own evidence."
+  (:require [bookkeeping.store :as store]
+            [bookkeeping.jurisdictions :as law]))
 
 (def confidence-floor 0.6)
 (def ^:private escalating-ops #{:issue-invoice :close-period})
@@ -33,9 +51,18 @@
 (defn- line-total [lines side]
   (transduce (comp (filter #(= side (:side %))) (map :amount)) + 0 lines))
 
+(defn- claims-input-tax-credit? [proposal]
+  (= :input-tax-credit (:tax-treatment proposal)))
+
 (defn- hard-violations [{:keys [request proposal]} client-record doc-record]
   (let [{:keys [op lines]} proposal
-        draft? (= :draft-entry op)]
+        draft? (= :draft-entry op)
+        ;; the jurisdiction is the CLIENT's, not the proposal's — an
+        ;; advisor that could pick its own jurisdiction could pick one
+        ;; whose rules it satisfies.
+        juris (:jurisdiction client-record)
+        tax-claim? (claims-input-tax-credit? proposal)
+        covered? (law/covered? juris)]
     (cond-> []
       (nil? client-record)
       (conj {:rule :no-client :detail "未登録 client"})
@@ -58,7 +85,26 @@
       (and draft? (not= (line-total lines :dr) (line-total lines :cr)))
       (conj {:rule :unbalanced-entry
              :detail (str "借方合計 " (line-total lines :dr)
-                          " ≠ 貸方合計 " (line-total lines :cr))}))))
+                          " ≠ 貸方合計 " (line-total lines :cr))})
+
+      ;; 5. the claim is made in a jurisdiction nobody has catalogued.
+      (and tax-claim? (not covered?))
+      (conj {:rule :unchecked-jurisdiction
+             :detail (str "仕入税額控除を主張しているが、法域 "
+                          (pr-str juris)
+                          " は bookkeeping.jurisdictions に無い（未検査は合格ではない）")})
+
+      ;; 6. the jurisdiction IS catalogued and conditions the credit on a
+      ;; qualified invoice — so the cited document must carry a valid
+      ;; registration number.
+      (and tax-claim? covered?
+           (law/requires-qualified-invoice? juris)
+           (not (law/registration-number-valid?
+                 juris (:registration-number doc-record))))
+      (conj {:rule :invalid-registration-number
+             :detail (str "仕入税額控除には適格請求書発行事業者の登録番号が要る。"
+                          "証憑 " (pr-str (:source-doc proposal)) " の登録番号: "
+                          (pr-str (:registration-number doc-record)))}))))
 
 (defn check
   "Assess a proposal against `request`/`context`/`proposal` and a
