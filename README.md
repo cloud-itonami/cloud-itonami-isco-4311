@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 30 tests / 175 assertions green.
+accounting actor. 25 tests / 96 assertions green.
 
 Four bookkeeping-specific HARD invariants (never approvable past):
 
@@ -34,49 +34,24 @@ Invariants 3 and 4 fire **only** on a proposal that claims the credit;
 an entry with no tax claim is unaffected. The actor does not invent a
 tax position in order to have one to check.
 
-## The jurisdiction catalog
+## The jurisdiction catalog moved out
 
-`src/bookkeeping/jurisdictions.cljc` holds the primary sources — e-Gov
-法令検索 for 電子帳簿保存法 / 消費税法 / 法人税法 / 所得税法 / 会社法 /
-会社計算規則 / 商法, and 国税庁 for インボイス制度, 仕入税額控除,
-帳簿書類等の保存期間, e-Tax. It is **data the governor reads**, not a
-reading list: invariants 3 and 4 above resolve against it.
+It lives in [`kotoba-lang/taxlaw`](https://github.com/kotoba-lang/taxlaw)
+now — lifted here when a second actor needed the same law. This repo checks
+the **receiving** side of インボイス制度 (a journal entry claiming 仕入税額控除
+must cite a document carrying a valid registration number); `tehai` checks
+the **issuing** side.
 
-Two things are kept apart on purpose, because conflating them is how a
-citation list becomes decoration:
+What that bought, beyond not having two copies: taxlaw verifies its
+citations against the e-Gov corpus (`kotoba-lang/jp.go.e-gov.elaws`, 9,536
+laws) rather than by fetching URLs. **A repealed statute serves its page
+with HTTP 200 like any other**, so the check that lived here could not have
+seen one.
 
-- **reachability** — all 15 URLs answered HTTP 200 on 2026-08-17.
-  Re-check any time: `nbb tools/verify_citations.cljs` (exit `0` clean,
-  `1` a citation went bad, `2` the run could not answer — an empty scan
-  is never reported as clean).
-- **content** — verified for exactly one claim, the registration-number
-  format, read off the NTA's own publication site. Every other entry
-  cites the instrument without quoting article text and is marked
-  `:rule/review :reachable-not-read`. **This actor renders no tax or
-  accounting opinion**, and neither does the catalog.
-
-Two candidate sources were **dropped rather than cited**: `asb.or.jp`
-(connection timed out) and 中小企業の会計に関する基本要領 (403 to a plain
-client; 200 only with a spoofed browser User-Agent). Both are recorded
-in `:catalog/rejected` with the reason. An unfetchable citation is not
-a citation.
-
-## The shared governor layer
-
-The four rules that are not about bookkeeping at all — `:no-client`,
-`:no-actuation`, `:unknown-source-doc`, `:source-doc-wrong-client` — and
-the verdict assembly now come from
-[`kotoba-lang/governor`](https://github.com/kotoba-lang/governor) rather
-than being hand-copied. That library surveyed 376 governors in this fleet
-and found one that had silently drifted into reporting a HARD violation as
-escalatable, inviting an approver to try to wave through something no
-approval can pass.
-
-`test/bookkeeping/conformance_test.clj` pins every disposition this actor
-can reach against `gov/conformance-failures`. **Measured: re-injecting that
-exact drift leaves all 26 pre-existing tests green and reddens only the
-conformance suite** — which is why the drift survived elsewhere, and why
-this suite is the one that had to exist.
+Invariants 3 and 4 now read `taxlaw/credit-support`, which answers in three
+values — `:none` (nobody catalogued this jurisdiction), refused, supported —
+and this actor holds on the first two for different reasons and with
+different details.
 
 Escalations (always human sign-off): `:issue-invoice` (external-send),
 `:close-period` (hard to reverse), low confidence (< 0.6). The advisor
