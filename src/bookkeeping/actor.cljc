@@ -98,10 +98,22 @@
                                    ;; whole change exists for. Dead code that
                                    ;; looks like a feature is worse than no
                                    ;; feature.
-                                   (posting/content-id (:source-doc proposal)
-                                                       (:lines proposal))
+                                   ;; 取引年月日 and 取引先 are part of the
+                                   ;; content, not decoration on it: two
+                                   ;; entries citing one monthly statement on
+                                   ;; different days to different suppliers
+                                   ;; are different entries, and leaving them
+                                   ;; out of the id would silently drop the
+                                   ;; second as a duplicate.
+                                   (posting/content-id
+                                    (:source-doc proposal)
+                                    (:lines proposal)
+                                    :transaction-date (:transaction-date proposal)
+                                    :counterparty (:counterparty proposal))
                                    (:lines proposal)
-                                   :memo (:memo proposal)))]
+                                   :memo (:memo proposal)
+                                   :transaction-date (:transaction-date proposal)
+                                   :counterparty (:counterparty proposal)))]
                        (store/commit-record! store record)
                        (when post
                          (store/commit-posting! store (:client-id request) post))

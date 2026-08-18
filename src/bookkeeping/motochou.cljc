@@ -34,10 +34,16 @@
   "Flatten postings into ledger lines, keeping commit order and remembering
   which posting each came from."
   [postings]
-  (for [{:keys [ledger/posting ledger/entries ledger/memo]} postings
+  (for [{:keys [ledger/posting ledger/entries ledger/memo
+                bookkeeping/transaction-date bookkeeping/counterparty]} postings
         e entries]
     {:posting posting
      :memo memo
+     ;; 取引年月日 / 取引先 ride down onto every line of the entry they came
+     ;; from. A 元帳 column that cannot say WHEN or WITH WHOM is the working
+     ;; with the working left out.
+     :transaction-date transaction-date
+     :counterparty counterparty
      :account (:ledger/account e)
      :side (:ledger/side e)
      :amount (:ledger/amount e)
@@ -53,10 +59,18 @@
   [postings]
   {:motochou/entry-count (count postings)
    :motochou/entries
-   (mapv (fn [{:keys [ledger/posting ledger/entries ledger/memo ledger/balanced?]}]
+   (mapv (fn [{:keys [ledger/posting ledger/entries ledger/memo ledger/balanced?
+                      bookkeeping/transaction-date bookkeeping/counterparty]}]
            {:posting posting
             :memo memo
             :balanced? balanced?
+            ;; Always present, nil when the entry carried none — see
+            ;; `bookkeeping.posting`. A 仕訳帳 that omitted the key would make
+            ;; "this entry has no 取引先" read the same as "nobody recorded
+            ;; one", and 規則第五条第五項第一号ハ turns on exactly that
+            ;; difference.
+            :transaction-date transaction-date
+            :counterparty counterparty
             :lines (mapv (fn [e]
                            {:account (:ledger/account e)
                             :side (:ledger/side e)

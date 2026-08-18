@@ -14,6 +14,8 @@
     {:op :draft-entry|:reconcile|:issue-invoice|:close-period
      :effect :propose        ; the advisor NEVER emits a raw store write
      :source-doc str-or-nil  ; cited source document id (:draft-entry)
+     :transaction-date str-or-nil ; 取引年月日, ISO-8601 YYYY-MM-DD
+     :counterparty str-or-nil     ; 取引先
      :lines [{:side :dr|:cr :account str :amount n} ...]
      :stake :low|:medium|:high
      :confidence 0.0-1.0
@@ -31,11 +33,19 @@
   "Deterministic mock inference: reads the request's declared fields
   straight through (a stand-in for what an LLM would extract from a
   source document image / free text), with a stake-derived confidence."
-  [_store {:keys [op stake source-doc lines] :as request}]
+  [_store {:keys [op stake source-doc lines transaction-date counterparty]
+           :as request}]
   {:op op
    :effect :propose
    :source-doc source-doc
    :lines (vec lines)
+   ;; 取引年月日 / 取引先 — two of the three 記録項目 規則第五条第五項第一号ハ
+   ;; requires a 優良帳簿 to be searchable by. Read straight through like
+   ;; :source-doc: the advisor extracts, it does not invent, and a fabricated
+   ;; counterparty is exactly what the governor's source-doc rule exists to
+   ;; stop from the other direction.
+   :transaction-date transaction-date
+   :counterparty counterparty
    :stake (or stake :low)
    :confidence (case (or stake :low) :high 0.7 :medium 0.85 :low 0.95)
    :rationale (str "proposed " (name op) " for client " (:client-id request))})

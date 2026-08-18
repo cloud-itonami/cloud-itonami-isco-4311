@@ -363,7 +363,7 @@ unconditionally is that the swap is a swap.
 
 ## The HTTP surface
 
-Two routes, and nothing else:
+Seven routes, and nothing else:
 
 ```
 POST /api/entry           submit a journal entry draft
@@ -371,6 +371,7 @@ POST /api/entries         submit many, and get one outcome each
 GET  /api/trial-balance   read what the committed postings add up to
 GET  /api/journal         仕訳帳 — every posting, in commit order
 GET  /api/ledger/:account 総勘定元帳 — one account, with a running balance
+GET  /api/search          検索機能 — 規則第五条第五項第一号ハ
 GET  /api/statements      read 貸借対照表 / 損益計算書
 ```
 
@@ -411,6 +412,102 @@ Measured: all five mutations red — opening on an absent allow-list, honouring
 a body-supplied client on write, on read, dropping `:posting-count`, and
 accepting an unrecognised `:side` (which would drop out of the projection and
 let the remainder balance by having lost a line).
+
+## 検索機能 — 電子帳簿保存法施行規則 第五条第五項第一号ハ
+
+Retrieved 2026-08-18 from the e-Gov law API,
+`GET https://laws.e-gov.go.jp/api/2/law_data/410M50000040043?response_format=json`:
+
+> ハ　当該国税関係帳簿に係る電磁的記録の記録事項の検索をすることができる機能（次に掲げる要件を満たすものに限る。）を確保しておくこと。
+> （１）取引年月日、取引金額及び取引先（（２）及び（３）において「記録項目」という。）を検索の条件として設定することができること。
+> （２）日付又は金額に係る記録項目については、その範囲を指定して条件を設定することができること。
+> （３）二以上の任意の記録項目を組み合わせて条件を設定することができること。
+
+### Two of the three 記録項目 did not exist
+
+Until 2026-08-18 a journal entry here recorded `:source-doc` and `:lines` and
+nothing else — no 取引年月日 and no 取引先. A search over what was stored would
+have **run, returned rows, and satisfied none of （１）** while looking exactly
+like a search that did. So the fields came first
+(`:bookkeeping/transaction-date`, `:bookkeeping/counterparty`, carried by
+`bookkeeping.posting/project` through to `bookkeeping.motochou`'s 仕訳帳 and
+元帳), and `bookkeeping.kensaku` searches over all three.
+
+They are **optional**, and that was a decision rather than a convenience:
+
+1. ハ binds only a 保存義務者 claiming **法第八条第四項**（優良帳簿, the
+   過少申告加算税 reduction). Ordinary preservation under 法第四条第一項 needs no
+   search function at all, so requiring the fields would impose a 優良帳簿
+   obligation on every deployment — the software deciding a tax election on
+   the client's behalf.
+2. Some entries genuinely have no 取引先 — 減価償却費, 決算整理仕訳, a transfer
+   between the client's own accounts. A required field whose honest answer is
+   *there is not one* gets filled with an invention.
+
+The price is paid at the claim, not at the door: `conformance` counts and
+**names** the entries that lack a 記録項目. A blank 取引先 is a `400`, never a
+counterparty made of spaces, and a `:transaction-date` must be an ISO-8601
+calendar date (`2026-02-30` is refused) so that a ハ（２） range compares
+chronologically.
+
+### 取引金額 for an entry with many lines
+
+**The sum of the debit side, per currency.** In a balanced entry it equals the
+credit side, so it is the amount of the transaction rather than of one leg —
+and it is never summed across currencies. This actor shipped that bug once
+(5000 JPY debit against 5000 USD credit balanced), so an entry's 取引金額 is a
+map `{currency total}`, an amount condition matches when at least one
+currency's total satisfies it, and the result says which matched.
+
+```
+?date=2026-01-15                       取引年月日, exact
+?date-from=…&date-to=…                 ハ（２）, inclusive, either side alone
+?amount=5000  ?amount-from=…&amount-to=…
+?counterparty=…                        取引先, exact
+any two or more                        ハ（３）, AND
+```
+
+**A conditionless search is a `400`, not the whole book.** `GET /api/journal`
+already hands back the whole book and says so; returning it here would make
+*I applied no filter* and *nothing matched* the same answer. An unrecognised
+parameter is a `400` too — `?conterparty=x` must not become "you asked
+nothing" when the caller asked something and was not heard.
+
+### What the deployment may claim, including "cannot tell"
+
+`bookkeeping.kensaku/conformance` answers in **five** values and only one is a
+pass:
+
+| status | meaning |
+|---|---|
+| `:not-declared` | nobody said whether this 保存義務者 claims 法第八条第四項. **Not a pass** — the software cannot observe a tax election. |
+| `:not-applicable` | declared as NOT claiming it. ハ does not bite. Also not a pass: the requirement was found not to apply, nothing was found compliant. |
+| `:no-entries` | claiming it, book empty. An empty ledger has not been shown searchable, only empty. |
+| `:non-conformant` | claiming it, and either the search fails a probe or entries lack 記録項目 — counted and named. |
+| `:conformant` | claiming it, all three probes pass, every entry carries all three. |
+
+`conformant?` is the convenient boolean and returns **false** for the first
+four, the same conservatism `kotoba.taxlaw/supported?` applies to an
+uncatalogued jurisdiction.
+
+The declaration lives on the **client record** (`:yuryo-chobo-declared?`),
+set by the operator — never read from the request. A caller that could
+declare its own 優良帳簿 election could declare compliance into existence.
+
+And the verdict **runs the search** rather than asserting it exists: eight
+probes over two synthetic postings check （１）（２）（３） individually. A
+build whose ranges silently degraded to equality reports ハ（２）`false` and
+cannot report 適合. *The function is defined* is a claim any file makes by
+containing a `defn`; *it returned exactly probe-b for a 5000–20000 range* is
+a measurement.
+
+Measured 2026-08-18: **53 mutations, 53 killed, 0 survived**
+(`nbb tools/check-mutations.cljs && nbb tools/mutate.cljs`). The table in
+`tools/mutations.edn` covers **only** the 記録項目 and the search — not the
+governor, the store, the statements or the batch route, which have suites and
+no mutations. Three of the 53 were added last precisely because they looked
+unmeasured, and all three survived the first run: the echoed conditions, the
+lines on a result row, and the `:why` sentence. Each is now tested.
 
 Escalations (always human sign-off): `:issue-invoice` (external-send),
 `:close-period` (hard to reverse), low confidence (< 0.6). The advisor
