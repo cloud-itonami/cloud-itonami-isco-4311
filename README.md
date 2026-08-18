@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 88 tests / 287 assertions green.
+accounting actor. 99 tests / 320 assertions green.
 
 Five bookkeeping-specific HARD invariants (never approvable past):
 
@@ -130,6 +130,49 @@ declares no `:origin` is not held; it asserted nothing. But `:tax` carries
 was not checked* rather than an unqualified approval — the same device as
 kintai's `:unevaluated` and tehai's `:tax`. Measured: dropping that key
 reddens three tests.
+
+## A retry must not double the books
+
+**Measured 2026-08-18, before this change:** submitting the same entry twice
+produced **two postings, both called `d1`**, and the trial balance for
+supplies went 5000 → 10000. The posting id was `(or entry-id source-doc)`,
+and that is wrong from both sides — a retry of one entry collided with
+itself, and two genuinely different entries citing one receipt collided with
+each other.
+
+A carrier that retries is normal. This had to be fixed before anything
+carried these requests anywhere.
+
+Posting ids are now **content-addressed**: a stable key over the source
+document and the lines in canonical order, so identical content is idempotent
+and different content is distinct. Line order does not change identity.
+
+`commit-posting!` is idempotent on that id, **on both backends** — and the
+second write is a **no-op, not an overwrite**, because a posting that changed
+under a stable id would be an edit to an append-only ledger. Idempotency is
+per client; two clients may legitimately hold a posting with the same id.
+
+**The posting is deduplicated; the audit trail is not.** Three submissions
+produce three ledger facts and one posting. A retry is a thing that happened,
+and an append-only ledger that hid it would be an audit trail of the wrong
+thing.
+
+`(or (:entry-id proposal) …)` was **dead code** — `bookkeeping.advisor/infer`
+builds a fixed map with no `:entry-id`, so nothing reaching the commit node
+ever carried one. Removed rather than wired up: a caller-chosen id can name
+two different entries the same and would defeat the idempotency this exists
+for. Dead code that looks like a feature is worse than no feature.
+
+Measured, mutations: remove MemStore's dedup — the original bug (4), remove
+**only DatomicStore's** (3), overwrite instead of no-op (1), key on the
+source document again (5), ignore the amount in the id (1), make the id
+order-dependent (1).
+
+> The DatomicStore mutation **survived the first run.** The idempotency tests
+> construct `mem-store` only, so the durable backend was uncovered — a
+> carrier retrying against it would have doubled that client's books and not
+> the other's. Three assertions moved into the contract test, where both
+> backends are held to them, and it reddens now.
 
 ## 貸借対照表 / 損益計算書
 

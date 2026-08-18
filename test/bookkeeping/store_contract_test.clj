@@ -143,3 +143,40 @@
     (is (empty? (store/ledger st)))
     (is (not (tb/balanced? (store/postings-of st "c-1")))
         "and an empty ledger is still not a balanced one")))
+
+;; ---------------------------------------------------------------------------
+;; idempotency — added because a one-backend mutation proved it was not covered
+;; ---------------------------------------------------------------------------
+;;
+;; The idempotency tests live in idempotency_test.clj and construct mem-store
+;; only, so breaking ONLY the DatomicStore's dedup reddened nothing. Measured
+;; 2026-08-18: 0 failures. A carrier retrying against the durable backend
+;; would have doubled that client's books and not the other's.
+
+(deftest committing-the-same-posting-twice-posts-once-on-both-backends
+  (on-both [st _]
+    (let [p (posting/project "fixed" (lines 5000 "JPY"))]
+      (dotimes [_ 3] (store/commit-posting! st "c-1" p))
+      (is (= 1 (count (store/postings-of st "c-1"))))
+      (is (= 5000 (:balance (get (tb/balances (store/postings-of st "c-1"))
+                                 ["supplies" "JPY"])))
+          "the trial balance is what was wrong, so it is what is asserted"))))
+
+(deftest the-second-write-is-a-no-op-not-an-overwrite-on-both-backends
+  (on-both [st _]
+    (store/commit-posting! st "c-1" (posting/project "fixed" (lines 5000 "JPY")))
+    (store/commit-posting! st "c-1" (posting/project "fixed" (lines 9999 "JPY")))
+    (let [ps (store/postings-of st "c-1")]
+      (is (= 1 (count ps)))
+      (is (= 5000 (:ledger/amount (first (:ledger/entries (first ps)))))
+          "a posting that changed under a stable id would be an edit to an
+           append-only ledger"))))
+
+(deftest idempotency-is-per-client-on-both-backends
+  (on-both [st _]
+    (let [p (posting/project "shared" (lines 100 "JPY"))]
+      (store/commit-posting! st "c-1" p)
+      (store/commit-posting! st "c-2" p)
+      (is (= 1 (count (store/postings-of st "c-1"))))
+      (is (= 1 (count (store/postings-of st "c-2")))
+          "two clients may legitimately hold a posting with the same id"))))

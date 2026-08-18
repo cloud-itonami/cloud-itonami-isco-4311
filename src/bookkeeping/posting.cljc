@@ -40,7 +40,8 @@
 
   Lines that carry no `:currency` all group under `nil` together, which is
   exactly the old behaviour — so a single-currency ledger sees no change."
-  (:require [kotoba.banking :as banking]))
+  (:require [clojure.string]
+            [kotoba.banking :as banking]))
 
 (def side->banking
   "This actor writes `:dr`/`:cr`; banking writes `:debit`/`:credit`. The map
@@ -70,6 +71,46 @@
   cannot represent is not a line it should call balanced."
   [lines]
   (boolean (some-> (entries lines) banking/balanced?)))
+
+(defn- fnv1a
+  "A deterministic 32-bit content hash, implemented here rather than pulled
+  in. It is NOT cryptographic and is not pretending to be — it exists to give
+  identical content the same key on JVM and JS, which `clojure.core/hash`
+  does not promise across platforms or versions. A collision here would merge
+  two different entries, so if this ever needs to resist an adversary it must
+  be replaced with a real digest, not widened."
+  [^String s]
+  (reduce (fn [h c]
+            (let [h (bit-xor h (bit-and (int c) 0xff))]
+              (bit-and (* h 16777619) 0xffffffff)))
+          2166136261
+          (seq s)))
+
+(defn content-id
+  "A stable id for an entry, derived from what the entry SAYS.
+
+  The actor used to key a posting on `(or entry-id source-doc)`, and that is
+  wrong twice over:
+
+    a retried submission of the SAME entry produced a SECOND posting under
+    the same id, and the trial balance doubled. Measured 2026-08-18: two
+    identical submissions, two postings both called `d1`, supplies 5000 ->
+    10000. A carrier that retries is normal, and this made retrying corrupt
+    the books.
+
+    two GENUINELY DIFFERENT entries citing the same receipt collided under
+    one id, which is the same defect from the other side.
+
+  Content-addressing fixes both: identical content is idempotent, different
+  content is distinct. The id is a function of the source document and the
+  lines in a canonical order, so line ordering does not change identity."
+  [source-doc lines]
+  (let [canon (->> lines
+                   (map (fn [{:keys [side account amount currency]}]
+                          (str (name (or side :?)) "|" account "|" amount "|" currency)))
+                   sort
+                   (clojure.string/join ";"))]
+    (str "je-" (fnv1a (str source-doc "\u0000" canon)))))
 
 (defn project
   "An approved journal entry as a `kotoba.banking` posting, or nil if the

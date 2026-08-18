@@ -79,7 +79,27 @@
                            ;; posting to look complete.
                            post (when (= :draft-entry (:op proposal))
                                   (posting/project
-                                   (or (:entry-id proposal) (:source-doc proposal))
+                                   ;; Content-addressed, with no escape
+                                   ;; hatch. Keying on the source document
+                                   ;; made a retry double-post and made two
+                                   ;; different entries citing one receipt
+                                   ;; collide -- see
+                                   ;; bookkeeping.posting/content-id.
+                                   ;;
+                                   ;; The previous form was
+                                   ;; `(or (:entry-id proposal) …)`, which
+                                   ;; was DEAD: `bookkeeping.advisor/infer`
+                                   ;; builds a fixed map with no :entry-id,
+                                   ;; so nothing reaching this node ever
+                                   ;; carried one. Removed rather than wired
+                                   ;; up, because a caller-chosen id can name
+                                   ;; two different entries the same and
+                                   ;; would defeat the idempotency this
+                                   ;; whole change exists for. Dead code that
+                                   ;; looks like a feature is worse than no
+                                   ;; feature.
+                                   (posting/content-id (:source-doc proposal)
+                                                       (:lines proposal))
                                    (:lines proposal)
                                    :memo (:memo proposal)))]
                        (store/commit-record! store record)
