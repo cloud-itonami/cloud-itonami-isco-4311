@@ -21,6 +21,11 @@
     record      — a committed operating record (journal-entry draft,
                   reconciliation note, issued invoice, period close) —
                   written ONLY via commit-record!, never mutated.
+    chart       — this client's chart of accounts, `{account {:type kw
+                  :section kw :concept str}}`. Supplied, never inferred:
+                  `kotoba.shohyo` refuses to guess what an account is, and
+                  a default here would answer the question before it was
+                  asked.
     posting     — the double-entry posting a committed journal entry
                   projected to (`kotoba.banking`, via bookkeeping.posting).
                   This is where an approved entry LANDS; before it existed,
@@ -58,6 +63,12 @@
   ;; would make that look like a posting of zero.
   (postings-of [s client-id])
   (commit-posting! [s client-id posting])
+  ;; A chart of accounts is PER CLIENT and supplied, never inferred. There is
+  ;; no default: `kotoba.shohyo` refuses to guess what an account is, and a
+  ;; store that shipped one would make that refusal cosmetic by answering the
+  ;; question before it was asked.
+  (chart-of [s client-id])
+  (register-chart! [s client-id chart])
   (append-ledger! [s fact]))
 
 (defrecord MemStore [a]
@@ -76,11 +87,14 @@
     (vec (get-in @a [:postings client-id] [])))
   (commit-posting! [s client-id posting]
     (swap! a update-in [:postings client-id] (fnil conj []) posting) s)
+  (chart-of [_ client-id] (get-in @a [:charts client-id]))
+  (register-chart! [s client-id chart]
+    (swap! a assoc-in [:charts client-id] chart) s)
   (append-ledger! [s fact]
     (swap! a update :ledger (fnil conj []) fact) s))
 
 (def ^:private schema
-  (ls/identity-schema [:client/id :doc/id :record/seq :posting/seq :ledger/seq]))
+  (ls/identity-schema [:client/id :doc/id :chart/client :record/seq :posting/seq :ledger/seq]))
 
 (defn- next-seq [conn seq-attr]
   (count (d/q [:find '?e :where ['?e seq-attr '_]] (d/db conn))))
@@ -105,6 +119,10 @@
   ;; stream per client instead would make `next-seq` per client too, and two
   ;; clients committing at the same seq would collide on a
   ;; `:db.unique/identity` attribute and UPSERT one over the other.
+  (chart-of [_ client-id]
+    (ls/blob-lookup conn :chart/client :chart/edn client-id))
+  (register-chart! [s client-id chart]
+    (ls/put-blob! conn :chart/client :chart/edn client-id chart) s)
   (postings-of [_ client-id]
     (mapv :posting
           (filterv #(= client-id (:client-id %))
@@ -131,5 +149,5 @@
 (defn mem-store
   ([] (mem-store {}))
   ([seed] (->MemStore (atom (merge {:clients {} :source-docs {}
-                                    :records [] :postings {} :ledger []}
+                                    :records [] :postings {} :charts {} :ledger []}
                                    seed)))))

@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 77 tests / 255 assertions green.
+accounting actor. 88 tests / 287 assertions green.
 
 Five bookkeeping-specific HARD invariants (never approvable past):
 
@@ -131,6 +131,48 @@ was not checked* rather than an unqualified approval — the same device as
 kintai's `:unevaluated` and tehai's `:tax`. Measured: dropping that key
 reddens three tests.
 
+## 貸借対照表 / 損益計算書
+
+The chain is now whole and reachable:
+
+```text
+仕訳 ─▶ governor ─▶ posting ─▶ trial balance ─▶ statements
+       (refuses)   (lands)     (arithmetic)     (classification)
+```
+
+Classification comes from [`kotoba-lang/shohyo`](https://github.com/kotoba-lang/shohyo),
+including the 会社計算規則 区分 and the 段階利益 ladder (売上総 → 営業 →
+経常 → 税引前).
+
+**There is no default chart of accounts, and that is the design.** shohyo
+refuses to guess what an account is, because a balance sheet that omits an
+account still balances. A default here would answer that question before
+anyone asked it and make the refusal cosmetic. A client with no chart gets
+**409, not an empty 200** — an empty statement is exactly what an
+inferred-and-wrong one would look like.
+
+Three distinctions the surface keeps:
+
+- **`200` means the request was answered, not that the books are finished.**
+  `:complete?` is a separate field, and unclassified accounts are always
+  named — that is the one thing a reader of a balance sheet cannot see for
+  themselves.
+- **Declared-and-empty is not undeclared.** A chart naming 営業外収益 has
+  said the section exists and is empty this period; a chart not naming it has
+  said nothing, and the ladder refuses the second. Measured: seeding only
+  sections that had balances made every sparse period report
+  `:not-declared`, and the test that caught it is
+  `declared-and-empty-is-not-undeclared`.
+- **第八十九条第二項 survives the JSON boundary.** A caller never receives a
+  negative 売上総利益 — it arrives as a positive 売上総損失金額 with its
+  article attached.
+
+Measured, all seven mutations red: serve statements without a chart (2+1),
+let a chart contradict 会社計算規則 (2), drop the zero-seed for declared
+sections (9), stop negating credit-normal sections (5), omit the
+unclassified list (1), answer 200 instead of 409 for a missing chart (1),
+ignore the caller's client on read (1).
+
 ## Two store backends, and the contract test that is the real deliverable
 
 `MemStore` (deterministic, zero-dep) and `DatomicStore` (the same protocol
@@ -171,6 +213,7 @@ Two routes, and nothing else:
 ```
 POST /api/entry           submit a journal entry draft
 GET  /api/trial-balance   read what the committed postings add up to
+GET  /api/statements      read 貸借対照表 / 損益計算書
 ```
 
 Of the four ops only `:draft-entry` both auto-commits and needs a network
