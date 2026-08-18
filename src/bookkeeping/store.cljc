@@ -26,8 +26,22 @@
                   This is where an approved entry LANDS; before it existed,
                   an approved entry was a decision with no destination.
     ledger      — an append-only audit trail of every proposal/verdict/
-                  disposition, regardless of outcome (commit or hold)."
-  )
+                  disposition, regardless of outcome (commit or hold).
+
+  ## Two backends, and why the contract test is the real deliverable
+
+  `MemStore` is the deterministic zero-dep default; `DatomicStore` is the
+  same protocol over `langchain.db`. Swapping them must be a swap — the
+  actor, the governor, the trial balance and the edge unchanged.
+
+  `postings-of` is the one that makes this more than hygiene here.
+  `bookkeeping.trial-balance` reads THROUGH it, so a backend that returned
+  postings out of order, unscoped, or de-duplicated would not produce an
+  error: it would produce a different balance sheet. That failure is silent
+  and authoritative-looking, which is exactly the kind the contract test
+  exists for."
+  (:require [langchain.db :as d]
+            [langchain-store.core :as ls]))
 
 (defprotocol Store
   (client [s client-id])
@@ -64,6 +78,55 @@
     (swap! a update-in [:postings client-id] (fnil conj []) posting) s)
   (append-ledger! [s fact]
     (swap! a update :ledger (fnil conj []) fact) s))
+
+(def ^:private schema
+  (ls/identity-schema [:client/id :doc/id :record/seq :posting/seq :ledger/seq]))
+
+(defn- next-seq [conn seq-attr]
+  (count (d/q [:find '?e :where ['?e seq-attr '_]] (d/db conn))))
+
+(defrecord DatomicStore [conn]
+  Store
+  (client [_ client-id] (ls/blob-lookup conn :client/id :client/edn client-id))
+  (source-doc [_ doc-id] (ls/blob-lookup conn :doc/id :doc/edn doc-id))
+  (records-of [_ client-id]
+    (filterv #(= client-id (:client-id %))
+             (ls/read-stream conn :record/seq :record/edn)))
+  (ledger [_] (ls/read-stream conn :ledger/seq :ledger/fact))
+  (register-client! [s c]
+    (ls/put-blob! conn :client/id :client/edn (:client-id c) c) s)
+  (register-source-doc! [s doc]
+    (ls/put-blob! conn :doc/id :doc/edn (:doc-id doc) doc) s)
+  (commit-record! [s record]
+    (ls/append-blob! conn :record/seq :record/edn
+                     (next-seq conn :record/seq) record) s)
+  ;; Postings are stored as one seq-keyed stream carrying the client on each
+  ;; entry, and filtered on read — the same shape as records. Keying the
+  ;; stream per client instead would make `next-seq` per client too, and two
+  ;; clients committing at the same seq would collide on a
+  ;; `:db.unique/identity` attribute and UPSERT one over the other.
+  (postings-of [_ client-id]
+    (mapv :posting
+          (filterv #(= client-id (:client-id %))
+                   (ls/read-stream conn :posting/seq :posting/edn))))
+  (commit-posting! [s client-id posting]
+    (ls/append-blob! conn :posting/seq :posting/edn
+                     (next-seq conn :posting/seq)
+                     {:client-id client-id :posting posting}) s)
+  (append-ledger! [s fact]
+    (ls/append-blob! conn :ledger/seq :ledger/fact
+                     (next-seq conn :ledger/seq) fact) s))
+
+(defn datomic-store
+  "A DatomicStore over a fresh in-process `langchain.db` connection.
+
+  In-process is the DEFAULT, not the guarantee. Durability is whatever
+  `langchain.db`'s `:db-api` is bound to; with the default in-process
+  DataScript it survives no longer than `MemStore` does. What it buys
+  unconditionally is that the swap is a swap, and the contract test proves
+  the two answer identically."
+  []
+  (->DatomicStore (d/create-conn schema)))
 
 (defn mem-store
   ([] (mem-store {}))

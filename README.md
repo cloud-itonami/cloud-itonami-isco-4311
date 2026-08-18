@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 66 tests / 207 assertions green.
+accounting actor. 77 tests / 255 assertions green.
 
 Five bookkeeping-specific HARD invariants (never approvable past):
 
@@ -130,6 +130,39 @@ declares no `:origin` is not held; it asserted nothing. But `:tax` carries
 was not checked* rather than an unqualified approval — the same device as
 kintai's `:unevaluated` and tehai's `:tax`. Measured: dropping that key
 reddens three tests.
+
+## Two store backends, and the contract test that is the real deliverable
+
+`MemStore` (deterministic, zero-dep) and `DatomicStore` (the same protocol
+over `langchain.db`, via `kotoba-lang/langchain-store` — the codec is not
+hand-rolled here).
+
+`test/bookkeeping/store_contract_test.clj` runs **every assertion against
+both**, because `actor-test`, `governor-test`, `tax-rules-test`,
+`ledger-test` and the edge tests all construct `mem-store` and only
+`mem-store`. A `DatomicStore` that answered differently would not redden one
+of them.
+
+**This matters more here than as hygiene.** `bookkeeping.trial-balance`
+reads *through* `postings-of`. A backend returning postings out of order,
+unscoped, or de-duplicated raises no error — it produces a **different
+balance sheet**, silently and authoritatively. So order and scoping are
+asserted directly, and one test compares the whole trial-balance report
+across backends rather than trusting counts.
+
+Measured, all five mutations red:
+
+| mutation | reddened |
+|---|---|
+| **DatomicStore only** — `next-seq` always 0 | 5 contract tests; nothing else |
+| **DatomicStore only** — postings ignore the client | 3 contract tests |
+| **DatomicStore only** — store the posting id without its entries | 5 contract tests |
+| MemStore only — ledger prepends | 1 contract test |
+| shrink `backends` to one entry | 3 — the evidence floor |
+
+`datomic-store` does not claim durability it cannot observe: with the default
+in-process DataScript it survives no longer than `MemStore`. What it buys
+unconditionally is that the swap is a swap.
 
 ## The HTTP surface
 
