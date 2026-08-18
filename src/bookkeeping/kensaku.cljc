@@ -64,7 +64,8 @@
   same discipline `kotoba-lang/taxlaw` uses for an uncatalogued jurisdiction
   and `kotoba-lang/worklaw` for an unexamined one."
   (:require [clojure.string :as str]
-            [bookkeeping.posting :as posting]))
+            [bookkeeping.posting :as posting]
+            [kotoba.taxlaw :as taxlaw]))
 
 (def provision
   "The provision this namespace implements, cited where it is answered rather
@@ -449,10 +450,23 @@
 (defn conformance
   "Does this ledger meet 規則第五条第五項第一号ハ?
 
-  Takes `{:postings [...] :declared? true|false|nil :search-fn f}`.
+  Takes `{:postings [...] :jurisdiction j :declared? true|false|nil
+  :search-fn f}`.
 
-  `:kensaku/status` is one of FIVE values, and only one of them is a pass:
+  `:kensaku/status` is one of SIX values, and only one of them is a pass:
 
+    :unchecked-jurisdiction
+                     the client's jurisdiction is not one `kotoba.taxlaw`
+                     has catalogued, or none was declared. **Not a pass**,
+                     and the reason it comes first: 規則第五条第五項第一号ハ
+                     is a Japanese ministerial ordinance, and answering
+                     適合 for a book kept somewhere else is not a lenient
+                     answer, it is an answer to a different question. The
+                     first version of this function asked whether the
+                     operator was claiming 優良帳簿 and never asked which
+                     country's 優良帳簿 — so a ledger with no jurisdiction
+                     at all reported `:conformant` against a provision that
+                     could not reach it.
     :not-declared    nobody said whether this 保存義務者 is claiming
                      法第八条第四項（優良帳簿）. **Not a pass.** The software
                      cannot observe a tax election, and answering 適合 to a
@@ -477,9 +491,16 @@
 
   `declared?` is read strictly: anything that is not literally `true` or
   `false` — a string \"yes\", a missing key — is `:not-declared`. A loose
-  truthiness test here would let `\"no\"` mean yes."
-  [{:keys [postings declared? search-fn] :or {search-fn search}}]
+  truthiness test here would let `\"no\"` mean yes. The jurisdiction is read
+  just as strictly, and from `kotoba.taxlaw` rather than from a set of
+  keywords kept here: whether a jurisdiction has this rule is the catalog's
+  answer to give, and a copy of it here would be a second place to update."
+  [{:keys [postings jurisdiction declared? search-fn] :or {search-fn search}}]
   (let [postings (vec postings)
+        ;; nil for an uncatalogued or undeclared jurisdiction — never false,
+        ;; which is what lets `there is no such rule here` stay distinct from
+        ;; `nobody has looked`.
+        rule-applies (taxlaw/requires-book-search? jurisdiction)
         fn-report (probe-search-function search-fn)
         searchable? (and (:kensaku/ha-1 fn-report)
                          (:kensaku/ha-2 fn-report)
@@ -489,14 +510,19 @@
                                    {:posting (:ledger/posting p) :missing (vec m)})))
                       postings)
         status (cond
+                 (nil? rule-applies) :unchecked-jurisdiction
                  (false? declared?) :not-applicable
                  (not (true? declared?)) :not-declared
                  (not searchable?) :non-conformant
                  (zero? (count postings)) :no-entries
                  (seq missing) :non-conformant
                  :else :conformant)]
-    {:kensaku/provision provision
-     :kensaku/law-source law-source
+    {;; the provision is stamped only where it reaches. Citing a Japanese
+     ;; ordinance on a verdict about a book kept elsewhere would put the
+     ;; same mistake in a different key.
+     :kensaku/provision (when (some? rule-applies) provision)
+     :kensaku/law-source (when (some? rule-applies) law-source)
+     :kensaku/jurisdiction jurisdiction
      :kensaku/status status
      :kensaku/declared (cond (true? declared?) true (false? declared?) false :else nil)
      :kensaku/search-function fn-report
@@ -505,6 +531,11 @@
      :kensaku/missing missing
      :kensaku/why
      (case status
+       :unchecked-jurisdiction
+       (str "法域 " (pr-str jurisdiction)
+            " は kotoba.taxlaw に無い。規則第五条第五項第一号ハ は日本の省令であり、"
+            "他所で備え付けられた帳簿について 適合 と答えるのは寛大な答えではなく、"
+            "別の問いへの答えである。")
        :not-applicable "法第八条第四項（優良帳簿）を主張していないと宣言されている。ハ は適用されない — 適合とは別の答えである。"
        :not-declared "法第八条第四項（優良帳簿）を主張しているかが宣言されていない。未宣言は適合ではない。"
        :no-entries "帳簿が空である。空の帳簿は検索可能であると示されたのではなく、空であると示されただけである。"
