@@ -27,7 +27,13 @@ io.github.kotoba-lang/langgraph
         ;; entry has a destination and balance is checked in one place.
         io.github.kotoba-lang/banking
         {:git/url "https://github.com/kotoba-lang/banking.git"
-         :git/sha "b8750ad17d16c012c7de62d4bf785973464495cc"}}
+         :git/sha "b8750ad17d16c012c7de62d4bf785973464495cc"}
+        ;; CACAO verification for the edge surface. The shared library --
+        ;; signature and temporal window are not reimplemented here
+        ;; (ADR-2607268000).
+        io.github.kotoba-lang/org-chainagnostic-cacao
+        {:git/url "https://github.com/kotoba-lang/org-chainagnostic-cacao.git"
+         :git/sha "b395935018d97ee281c9b4564f855c8242b438e7"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
