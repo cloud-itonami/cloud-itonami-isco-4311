@@ -39,9 +39,81 @@
   private one.
 
   Lines that carry no `:currency` all group under `nil` together, which is
-  exactly the old behaviour — so a single-currency ledger sees no change."
-  (:require [clojure.string]
+  exactly the old behaviour — so a single-currency ledger sees no change.
+
+  ## 取引年月日 and 取引先 — the two 記録項目 that were not being recorded
+
+  電子帳簿保存法施行規則 第五条第五項第一号ハ（１） names three 記録項目 a
+  国税関係帳簿 must be searchable by: **取引年月日、取引金額及び取引先**. This
+  actor recorded only `:source-doc` and `:lines`, so two of the three did not
+  exist anywhere in the plane. A search over what was stored would have run,
+  returned rows, and satisfied none of （１） — the shape this fleet keeps
+  finding, where a check that could not look returns the same value as one
+  that looked and found nothing.
+
+  So `project` carries them, under this actor's OWN namespace
+  (`:bookkeeping/transaction-date`, `:bookkeeping/counterparty`) rather than
+  `:ledger/*`: `kotoba.banking` does not define them and stamping its
+  namespace on them would claim a contract that library never made.
+
+  Both keys are ALWAYS present on the posting, `nil` when the entry carried
+  none. Omitting the key instead would make `this entry has no 取引先` and
+  `nobody thought about 取引先 here` the same read.
+
+  A blank or whitespace-only 取引先 is normalised to `nil` — recorded as
+  absent, never as a counterparty named \"   \". The edge refuses one outright
+  (400) so a caller learns; this is the floor under callers that are not the
+  edge."
+  (:require [clojure.string :as str]
             [kotoba.banking :as banking]))
+
+;; ---------------------------------------------------------------------------
+;; 記録項目 — what a searchable entry must carry
+;; ---------------------------------------------------------------------------
+
+(def ^:private month-days [31 28 31 30 31 30 31 31 30 31 30 31])
+
+(defn- leap-year? [y]
+  (and (zero? (mod y 4))
+       (or (not (zero? (mod y 100))) (zero? (mod y 400)))))
+
+(defn- digits->int [s]
+  #?(:clj (Long/parseLong s) :cljs (js/parseInt s 10)))
+
+(defn valid-transaction-date?
+  "Is `s` an ISO-8601 calendar date, `YYYY-MM-DD`?
+
+  ISO-8601 and not a platform date object, for one reason that decides it:
+  規則第五条第五項第一号ハ（２）requires a RANGE condition on 日付, and in
+  this form lexicographic order is chronological order, on both `:clj` and
+  `:cljs`, with no date library and no timezone. A `2026/1/5` or a
+  `Jan 5 2026` would sort as text and compare wrongly while looking fine.
+
+  The calendar is checked, not just the shape: `2026-02-30` and `2026-13-01`
+  are refused, and 2024-02-29 is accepted while 2026-02-29 is not. A date
+  that cannot exist is a client system to fix, and it would sit in a range
+  query forever answering nothing."
+  [s]
+  (boolean
+   (when (string? s)
+     (when-let [m (re-matches #"(\d{4})-(\d{2})-(\d{2})" s)]
+       (let [y (digits->int (nth m 1))
+             mo (digits->int (nth m 2))
+             d (digits->int (nth m 3))]
+         (and (<= 1 mo 12)
+              (<= 1 d (if (and (= 2 mo) (leap-year? y))
+                        29
+                        (nth month-days (dec mo))))))))))
+
+(defn normalize-counterparty
+  "A 取引先 as it should be recorded, or `nil`.
+
+  Blank and whitespace-only collapse to `nil`. A counterparty recorded as
+  `\"\"` is worse than one recorded as absent: it is indistinguishable from a
+  real name in a `=` search, so a 取引先 condition would match entries that
+  never had one."
+  [s]
+  (when (and (string? s) (not (str/blank? s))) s))
 
 (def side->banking
   "This actor writes `:dr`/`:cr`; banking writes `:debit`/`:credit`. The map
@@ -103,14 +175,25 @@
 
   Content-addressing fixes both: identical content is idempotent, different
   content is distinct. The id is a function of the source document and the
-  lines in a canonical order, so line ordering does not change identity."
-  [source-doc lines]
+  lines in a canonical order, so line ordering does not change identity.
+
+  **取引年月日 and 取引先 are part of the content.** Two entries citing one
+  monthly statement, on different days, to different suppliers, with the same
+  accounts and the same amount are DIFFERENT entries — and before these two
+  fields existed there was nothing to tell them apart, so they collided under
+  one id and the second was silently dropped as a duplicate. That is the same
+  defect this function was written to fix, arriving through the fields that
+  were missing."
+  [source-doc lines & {:keys [transaction-date counterparty]}]
   (let [canon (->> lines
                    (map (fn [{:keys [side account amount currency]}]
                           (str (name (or side :?)) "|" account "|" amount "|" currency)))
                    sort
-                   (clojure.string/join ";"))]
-    (str "je-" (fnv1a (str source-doc "\u0000" canon)))))
+                   (str/join ";"))]
+    (str "je-" (fnv1a (str source-doc "\u0000"
+                          transaction-date "\u0000"
+                          (normalize-counterparty counterparty) "\u0000"
+                          canon)))))
 
 (defn project
   "An approved journal entry as a `kotoba.banking` posting, or nil if the
@@ -120,7 +203,14 @@
   `:ledger/unbalanced` — deliberately, so a governor can reject a posting
   before it reaches a ledger. This function does NOT filter unbalanced
   postings out: the governor upstream is what refuses them, and silently
-  dropping one here would hide a refusal that is supposed to be visible."
-  [entry-id lines & {:keys [memo]}]
+  dropping one here would hide a refusal that is supposed to be visible.
+
+  `:bookkeeping/transaction-date` and `:bookkeeping/counterparty` are always
+  assoc'd, `nil` when the entry carried none — see the namespace docstring for
+  why the key is present rather than omitted, and why a blank 取引先 becomes
+  `nil` here rather than a name made of spaces."
+  [entry-id lines & {:keys [memo transaction-date counterparty]}]
   (when-let [es (entries lines :ref entry-id)]
-    (banking/posting entry-id es :memo memo)))
+    (assoc (banking/posting entry-id es :memo memo)
+           :bookkeeping/transaction-date transaction-date
+           :bookkeeping/counterparty (normalize-counterparty counterparty))))

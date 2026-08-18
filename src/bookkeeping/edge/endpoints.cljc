@@ -1,17 +1,18 @@
 (ns bookkeeping.edge.endpoints
-  "The HTTP surface this actor exposes — exactly two routes:
+  "The HTTP surface this actor exposes — exactly these routes:
 
       POST /api/entry           submit a journal entry draft
       POST /api/entries         submit many, and get one outcome each
       GET  /api/trial-balance   read what the committed postings add up to
       GET  /api/journal         仕訳帳 — every posting, in commit order
       GET  /api/ledger/:account 総勘定元帳 — one account, with a running balance
+      GET  /api/search          検索機能 — 規則第五条第五項第一号ハ
       GET  /api/statements      read 貸借対照表 / 損益計算書
 
   and nothing else. Per `manifest/repository-rules.edn` an itonami actor is
   `:on-demand`: it answers a request and stops.
 
-  ## Why these two
+  ## Why these writes
 
   Of the four ops, only `:draft-entry` both auto-commits and genuinely needs
   a network path — a client's system pushes entries as they happen. The
@@ -50,6 +51,8 @@
             [bookkeeping.trial-balance :as tb]
             [bookkeeping.statements :as statements]
             [bookkeeping.motochou :as motochou]
+            [bookkeeping.kensaku :as kensaku]
+            [bookkeeping.posting :as posting]
             [kotoba.shohyo :as shohyo]
             #?(:clj [clojure.edn :as edn] :cljs [cljs.reader :as edn])
             #?(:cljs [cacao.edge.verify :as cacao])))
@@ -73,7 +76,8 @@
 (def ^:private sides #{:dr :cr})
 
 (defn parse-entry-body
-  "EDN body -> `{:source-doc str :lines [...]}`.
+  "EDN body -> `{:source-doc str :lines [...]}`, plus the two optional
+  記録項目 `:transaction-date` and `:counterparty`.
 
   Every line must carry a recognised `:side`, a string `:account` and a
   numeric `:amount`. A client system sending something else is a system to
@@ -84,7 +88,43 @@
 
   **A body naming a client is rejected**, rather than ignored. Silently
   dropping it would let a caller believe it had written somewhere it had
-  not."
+  not.
+
+  ## 取引年月日 and 取引先 are OPTIONAL, and this was a decision
+
+  規則第五条第五項第一号ハ requires all three 記録項目, so making them
+  required is the tempting read. It is wrong here, twice:
+
+  1. **ハ only binds a 保存義務者 claiming 法第八条第四項（優良帳簿）.**
+     Ordinary preservation under 法第四条第一項 requires no search function
+     at all. Requiring the fields would impose a 優良帳簿 obligation on every
+     deployment of this actor, including the ones not claiming it — the
+     software deciding a tax election on the client's behalf, which is the
+     exact thing `bookkeeping.kensaku/conformance` refuses to do.
+  2. **Some journal entries genuinely have no 取引先.** 減価償却費,
+     決算整理仕訳, a transfer between the client's own accounts. A required
+     field whose honest answer is `there is not one` gets filled with an
+     invention, and an invented counterparty is what this actor's governor
+     spends its `:no-source-doc` rule preventing from the other direction.
+
+  The price is that an entry submitted without them can never be searched by
+  them, so `conformance` COUNTS those entries and names them, and reports
+  非適合 rather than 適合 when the operator has declared they are claiming
+  優良帳簿. Optional at the door, measured at the claim.
+
+  Measured 2026-08-18: every existing caller in this repo's suites — 8 test
+  namespaces, `bookkeeping.render-html`, and the batch route — constructs
+  entry bodies with no `:transaction-date` and no `:counterparty`. Required
+  would have broken all of them, and the fix would have been to invent dates.
+
+  ## What is NOT optional
+
+  A `:transaction-date` that is present must be an ISO-8601 `YYYY-MM-DD`
+  calendar date (`bookkeeping.posting/valid-transaction-date?`) — a
+  `2026-02-30` sits in a range query forever answering nothing — and a
+  `:counterparty` that is present must be a non-blank string. A blank one is
+  refused here with a 400 rather than normalised away, so the caller learns
+  its field was empty instead of believing it recorded a 取引先."
   [s]
   (try
     (let [m (edn/read-string s)]
@@ -95,7 +135,11 @@
                  (every? #(and (sides (:side %))
                                (string? (:account %))
                                (number? (:amount %)))
-                         (:lines m)))
+                         (:lines m))
+                 (or (nil? (:transaction-date m))
+                     (posting/valid-transaction-date? (:transaction-date m)))
+                 (or (nil? (:counterparty m))
+                     (some? (posting/normalize-counterparty (:counterparty m)))))
         m))
     (catch #?(:clj Exception :cljs :default) _ nil)))
 
@@ -160,6 +204,12 @@
             r (actor/run-request! g {:client-id client-id :op :draft-entry
                                      :stake :low
                                      :source-doc (:source-doc body)
+                                     ;; the other two 記録項目, nil when the
+                                     ;; caller sent none — see parse-entry-body
+                                     ;; for why that is permitted and what it
+                                     ;; costs the deployment
+                                     :transaction-date (:transaction-date body)
+                                     :counterparty (:counterparty body)
                                      :lines (:lines body)}
                                   {} (str "edge-" caller-did "-" (:source-doc body)))
             posting-outcome {:duplicate? (contains? before
@@ -440,6 +490,89 @@
          :body {:ok true :client client-id :account account-name
                 :by-currency (:motochou/by-currency r)}}))))
 
+(defn search-core
+  "`GET /api/search`. Read-only, the caller's own book. 検索機能 per
+  電子帳簿保存法施行規則 第五条第五項第一号ハ.
+
+    503 / 403  as everywhere else
+    400        no 記録項目 was set, or a condition the provision does not
+               define — **not** a 200 over the whole book
+    200        what matched, and what this deployment can claim
+
+  `query` is a `{param value}` map of URL query parameters, taken as an
+  argument the way `ledger-core` takes its account name — the core stays pure
+  and the Cloudflare handler is the only thing that knows about URLs.
+
+      ?date=2026-01-15                     取引年月日, exact
+      ?date-from=…&date-to=…               ハ（２）, inclusive, either side alone
+      ?amount=5000  ?amount-from=…&amount-to=…
+      ?counterparty=…                      取引先, exact
+      any two or more of the above         ハ（３）, AND
+
+  ## Why a conditionless search is a 400
+
+  It could have returned the whole book with a marker. It does not, for two
+  reasons: this actor ALREADY has a route that hands back the whole book and
+  says so (`GET /api/journal`), and a caller counting rows would otherwise
+  read `I applied no filter` and `nothing matched` off the same response.
+  `bookkeeping.kensaku/search` keeps them apart at the value level too — the
+  `:no-conditions` answer carries no `:kensaku/results` key at all, so there
+  is no empty list to misread.
+
+  ## Why the conformance verdict rides on this response
+
+  Because this is the route whose existence the provision is about. A
+  deployment that can search and a deployment that may CLAIM 優良帳簿 are
+  different facts, and returning results without the second would let a
+  working search stand in for a compliance answer it does not give — ハ binds
+  only a 保存義務者 claiming 法第八条第四項, which the software cannot
+  observe. `:not-declared` is the honest default and it is not a pass."
+  [store allowlist caller-did query]
+  (cond
+    (nil? allowlist) {:status 503 :body {:ok false :error "no allow-list configured"}}
+    (nil? (client-for allowlist caller-did))
+    {:status 403 :body {:ok false :error "caller not permitted"}}
+    :else
+    (let [client-id (client-for allowlist caller-did)
+          postings (store/postings-of store client-id)
+          parsed (kensaku/parse-query query)]
+      (if-let [problems (:kensaku/problems parsed)]
+        {:status 400 :body {:ok false :error "invalid search condition"
+                            :provision kensaku/provision
+                            :problems problems}}
+        (let [r (kensaku/search postings (:kensaku/conditions parsed))]
+          (case (:kensaku/coverage r)
+            :no-conditions
+            {:status 400 :body {:ok false :error "no 記録項目 set"
+                                :provision kensaku/provision
+                                :why (:kensaku/why r)}}
+
+            :invalid-condition
+            {:status 400 :body {:ok false :error "invalid search condition"
+                                :provision kensaku/provision
+                                :problems (:kensaku/problems r)}}
+
+            {:status 200
+             :body {:ok true :client client-id
+                    :provision kensaku/provision
+                    :conditions (:kensaku/conditions r)
+                    ;; both, always: nothing matched out of nothing examined
+                    ;; and nothing matched out of four hundred are different
+                    ;; answers
+                    :searched-count (:kensaku/searched-count r)
+                    :match-count (:kensaku/match-count r)
+                    :results (:kensaku/results r)
+                    ;; The declaration is the OPERATOR's, held on the client
+                    ;; record, never read from the request — the same rule
+                    ;; that keeps a caller from naming its own client. A
+                    ;; caller that could declare its own 優良帳簿 election
+                    ;; could declare compliance into existence.
+                    :conformance (kensaku/conformance
+                                  {:postings postings
+                                   :declared? (:yuryo-chobo-declared?
+                                               (store/client store client-id))
+                                   :search-fn kensaku/search})}}))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Cloudflare entry points
 ;; ---------------------------------------------------------------------------
@@ -501,6 +634,45 @@
                       :else
                       (json-response (trial-balance-core (store/mem-store)
                                                          allowlist (:iss v))))))
+           (.catch (fn [e]
+                     (json-response {:status 500
+                                     :body {:ok false :error "request failed"
+                                            :reason (ex-message e)}})))))))
+
+#?(:cljs
+   (defn- query-map
+     "The request URL's query string as a `{param value}` map.
+
+     A repeated parameter keeps the LAST value rather than silently building a
+     list the core cannot type. `?date=a&date=b` is a caller that meant one
+     thing and said two; the condition it gets is one of them, and
+     `:conditions` is echoed in the response so it can see which."
+     [context]
+     (let [url (js/URL. (aget (aget context "request") "url"))]
+       (persistent!
+        (reduce (fn [acc pair] (assoc! acc (aget pair 0) (aget pair 1)))
+                (transient {})
+                (es6-iterator-seq (.entries (.-searchParams url))))))))
+
+#?(:cljs
+   (defn on-request-get-search
+     "Verifies the CACAO and hands an already-verified caller to
+     `search-core`. No policy of its own — the same shape as
+     `on-request-get-trial-balance`."
+     [context]
+     (let [env (aget context "env")
+           mode (store-mode (env-of context))
+           allowlist (parse-allowlist (aget env "BOOKKEEPING_CALLER_ALLOWLIST"))]
+       (-> (cacao/verify (bearer context))
+           (.then (fn [v]
+                    (cond
+                      (nil? mode) (json-response (store-unconfigured-response))
+                      (not (:valid v))
+                      (json-response {:status 401
+                                      :body {:ok false :error "invalid or expired CACAO"}})
+                      :else
+                      (json-response (search-core (store/mem-store) allowlist (:iss v)
+                                                  (query-map context))))))
            (.catch (fn [e]
                      (json-response {:status 500
                                      :body {:ok false :error "request failed"
