@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 42 tests / 138 assertions green.
+accounting actor. 54 tests / 168 assertions green.
 
 Five bookkeeping-specific HARD invariants (never approvable past):
 
@@ -43,21 +43,52 @@ tax position in order to have one to check.
 
 ## Where an approved entry goes
 
-Until `bookkeeping.posting` existed, this actor could refuse a bad journal
-entry and approve a good one, and the good one went nowhere. `:lines` was a
-private shape read by one function in the governor and by nothing else in
-the fleet — an approved entry was a decision with no destination.
-
-It now projects onto [`kotoba-lang/banking`](https://github.com/kotoba-lang/banking),
-the double-entry contract this workspace already had, and which
+An approved journal entry now LANDS. On commit of a `:draft-entry` the actor
+projects it onto [`kotoba-lang/banking`](https://github.com/kotoba-lang/banking)
+— the double-entry contract
 [`kotoba-lang/kakeibo`](https://github.com/kotoba-lang/kakeibo) was already
-using for personal statement rows:
+using for personal statement rows — and stores the posting:
 
 ```text
 kakeibo     statement rows  ─┐
                              ├─▶  kotoba.banking   double-entry postings
-bookkeeping journal entries ─┘
+bookkeeping journal entries ─┘         │
+                                       └─▶ bookkeeping.trial-balance  試算表
 ```
+
+**The previous commit shipped the projection and did not call it.**
+`bookkeeping.posting` was written, tested, and reachable only from its own
+tests — the same "checkable but nobody invokes it" shape this fleet keeps
+finding elsewhere, introduced here while claiming the gap was closed. The
+test that would have caught it is `posting-is-reachable-from-the-actor`, and
+it is phrased about the ACTOR rather than the projection on purpose.
+
+Only `:draft-entry` projects. `:reconcile`, `:issue-invoice` and
+`:close-period` are not journal entries and must not manufacture a posting
+to look complete. That guard needed its own discriminating test: `:reconcile`
+carries no `:lines`, so the projection already refuses and removing the guard
+changed nothing observable — **measured, that mutation survived** until a
+case existed for an op that is not a journal entry but does carry lines.
+
+The ledger fact records whether a posting was produced, so an entry that
+produced none is auditable rather than invisible.
+
+## 試算表 — reading the ledger back
+
+`bookkeeping.trial-balance` is the first thing in this plane that reads
+postings back rather than deciding. `balances` is keyed by
+`[account currency]`, **never by account alone** — aggregating by account
+would reintroduce the currency bug one layer up, where a total that nets to
+zero is exactly the output that stops people looking.
+
+`balanced?` is **false for an empty posting set**. Zero does equal zero, but
+an empty ledger has not been shown to balance; it has been shown to be
+empty, and reporting those identically is how a check becomes a formality.
+`out-of-balance` names the currencies, because a boolean is not enough for
+whoever has to fix it.
+
+It proves arithmetic, not classification: this actor has no chart of
+accounts, so an account is whatever string an entry named.
 
 ### What that exposed
 

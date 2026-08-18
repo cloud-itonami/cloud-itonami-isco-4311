@@ -21,7 +21,8 @@
             [langgraph.checkpoint :as cp]
             [bookkeeping.advisor :as advisor]
             [bookkeeping.governor :as governor]
-            [bookkeeping.store :as store]))
+            [bookkeeping.store :as store]
+            [bookkeeping.posting :as posting]))
 
 (defn build-graph
   "Build a compiled BookkeepingActor graph. `store` implements
@@ -63,11 +64,36 @@
                      (let [record {:client-id (:client-id request)
                                     :op (:op proposal)
                                     :source-doc (:source-doc proposal)
-                                    :payload proposal}]
+                                    :payload proposal}
+                           ;; An approved journal entry LANDS here. Until
+                           ;; this call existed, `bookkeeping.posting` was
+                           ;; reachable only from its own tests: the
+                           ;; projection was written, verified, and never
+                           ;; invoked by the actor — the same "checkable but
+                           ;; nobody calls it" shape this fleet keeps
+                           ;; finding elsewhere.
+                           ;;
+                           ;; Only :draft-entry projects. :reconcile,
+                           ;; :issue-invoice and :close-period are not
+                           ;; journal entries and must not manufacture a
+                           ;; posting to look complete.
+                           post (when (= :draft-entry (:op proposal))
+                                  (posting/project
+                                   (or (:entry-id proposal) (:source-doc proposal))
+                                   (:lines proposal)
+                                   :memo (:memo proposal)))]
                        (store/commit-record! store record)
-                       (store/append-ledger! store {:disposition :commit :record record})
+                       (when post
+                         (store/commit-posting! store (:client-id request) post))
+                       (store/append-ledger!
+                        store (cond-> {:disposition :commit :record record}
+                                ;; The ledger says whether a posting was
+                                ;; produced, so "this entry produced none"
+                                ;; is auditable rather than invisible.
+                                true (assoc :posting (:ledger/posting post))))
                        {:record record
-                        :audit [{:node :commit :record record}]})))
+                        :posting post
+                        :audit [{:node :commit :record record :posting post}]})))
       (g/add-node :hold
                    (fn [{:keys [verdict]}]
                      (store/append-ledger! store {:disposition :hold :verdict verdict})
