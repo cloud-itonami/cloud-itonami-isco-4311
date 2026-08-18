@@ -33,7 +33,12 @@ io.github.kotoba-lang/langgraph
         ;; (ADR-2607268000).
         io.github.kotoba-lang/org-chainagnostic-cacao
         {:git/url "https://github.com/kotoba-lang/org-chainagnostic-cacao.git"
-         :git/sha "b395935018d97ee281c9b4564f855c8242b438e7"}}
+         :git/sha "b395935018d97ee281c9b4564f855c8242b438e7"}
+        ;; the durable store backend. Its codec (blob-lookup / put-blob! /
+        ;; read-stream / append-blob!) is not hand-rolled here.
+        io.github.kotoba-lang/langchain-store
+        {:git/url "https://github.com/kotoba-lang/langchain-store.git"
+         :git/sha "b986669f72276568c97e1fa5b331a5ff3017bf69"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
