@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 54 tests / 168 assertions green.
+accounting actor. 66 tests / 207 assertions green.
 
 Five bookkeeping-specific HARD invariants (never approvable past):
 
@@ -130,6 +130,53 @@ declares no `:origin` is not held; it asserted nothing. But `:tax` carries
 was not checked* rather than an unqualified approval — the same device as
 kintai's `:unevaluated` and tehai's `:tax`. Measured: dropping that key
 reddens three tests.
+
+## The HTTP surface
+
+Two routes, and nothing else:
+
+```
+POST /api/entry           submit a journal entry draft
+GET  /api/trial-balance   read what the committed postings add up to
+```
+
+Of the four ops only `:draft-entry` both auto-commits and needs a network
+path. `:issue-invoice` and `:close-period` always escalate, so they end in a
+human's judgement and are not reachable from a socket at all; `:reconcile`
+auto-commits but nothing pushes it.
+
+The read is the other half, and the reason the surface is worth having:
+until `bookkeeping.trial-balance` there was nothing to **ask** this actor.
+An actor that only accepts is a write-only hole.
+
+### Three ways a surface undoes the actor behind it
+
+Every test in `test/bookkeeping/edge/endpoints_test.clj` is one of these.
+
+**It opens when nothing is configured.** An absent allow-list serves `503`,
+never an open endpoint — "nobody is allowed" and "nothing was configured"
+are different deployment states. An unconfigured store also serves `503`
+rather than an empty in-process one, because an empty store makes every
+request fail the registration check and the caller gets blamed
+(`:no-client`) for a deployment fault.
+
+**It lets the caller say who it is.** The client id comes from the
+allow-list, keyed by verified DID. A body naming `:client-id` is **rejected
+outright**, not ignored — silently dropping it would let a caller believe it
+had written somewhere it had not. This is the same rule the governor applies
+to jurisdiction: a caller that could nominate its own client could nominate
+one whose ledger it may read, undoing the store's per-client scoping one
+layer up.
+
+**It reports an empty answer as a good one.** `:balanced?` is false for both
+an empty ledger and an unbalanced one — correctly — so the read always
+carries `:posting-count`, which is what tells a JSON reader which it is
+looking at.
+
+Measured: all five mutations red — opening on an absent allow-list, honouring
+a body-supplied client on write, on read, dropping `:posting-count`, and
+accepting an unrecognised `:side` (which would drop out of the projection and
+let the remainder balance by having lost a line).
 
 Escalations (always human sign-off): `:issue-invoice` (external-send),
 `:close-period` (hard to reverse), low confidence (< 0.6). The advisor
