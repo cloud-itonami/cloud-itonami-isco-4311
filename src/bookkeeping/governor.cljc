@@ -136,12 +136,27 @@
              :detail (str "貸借が一致しない（通貨ごとに検査）: "
                           (pr-str (mapv (juxt :side :amount :currency) lines)))})
 
-      ;; 5. the claim is made in a jurisdiction nobody has catalogued.
+      ;; 5. the claim is made where this workspace cannot check it — either
+      ;; because nobody catalogued the jurisdiction at all, or because the
+      ;; jurisdiction IS catalogued and the input-tax facet was deliberately
+      ;; left out of it.
+      ;;
+      ;; Those are the same verdict and NOT the same sentence. Since taxlaw
+      ;; gained `[:us]`, "法域 [:us] は kotoba.taxlaw に無い" is simply false —
+      ;; the United States is in the catalog, and what it does not have is a
+      ;; federal VAT for a credit to be claimed against. The hold is right
+      ;; either way; a hold that explains itself wrongly sends an operator to
+      ;; look in the wrong place.
       (= :none (:taxlaw/coverage support))
       (conj {:rule :unchecked-jurisdiction
-             :detail (str "仕入税額控除を主張しているが、法域 "
-                          (pr-str juris)
-                          " は kotoba.taxlaw に無い（未検査は合格ではない）")})
+             :taxlaw/out-of-scope (:taxlaw/out-of-scope support)
+             :detail (if-let [why (:taxlaw/why support)]
+                       (str "仕入税額控除を主張しているが、法域 " (pr-str juris)
+                            " では検査できない: " why
+                            "（未検査は合格ではない）")
+                       (str "仕入税額控除を主張しているが、法域 "
+                            (pr-str juris)
+                            " は kotoba.taxlaw に無い（未検査は合格ではない）"))})
 
       ;; 6. the jurisdiction IS catalogued and this document does not
       ;; support the credit under it.

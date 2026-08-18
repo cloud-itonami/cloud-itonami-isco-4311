@@ -410,4 +410,48 @@
   :invariant "a caller cannot name the jurisdiction whose rule it satisfies"
   :file "src/bookkeeping/edge/endpoints.cljc"
   :find "                                     :jurisdiction (:jurisdiction c)"
-  :replace "                                     :jurisdiction :jp"}]
+  :replace "                                     :jurisdiction :jp"}
+
+ ;; --- two more jurisdictions in taxlaw, and not one pass wider (2026-08-18) ---
+
+ {:id :an-uncheckable-jurisdiction-is-still-a-hold
+  :invariant "a US claim is held as hard as before the US was catalogued"
+  :file "src/bookkeeping/governor.cljc"
+  :find "      (= :none (:taxlaw/coverage support))\n      (conj {:rule :unchecked-jurisdiction"
+  :replace "      (= :nope (:taxlaw/coverage support))\n      (conj {:rule :unchecked-jurisdiction"}
+
+ {:id :the-hold-explains-itself-accurately
+  :invariant "`the US is not in taxlaw` became false when the US was catalogued"
+  :file "src/bookkeeping/governor.cljc"
+  :find "             :detail (if-let [why (:taxlaw/why support)]"
+  :replace "             :detail (if-let [why nil]"}
+
+ {:id :the-out-of-scope-facet-is-forwarded
+  :invariant "an operator learns WHICH facet was missing, not just that one was"
+  :file "src/bookkeeping/governor.cljc"
+  :find "             :taxlaw/out-of-scope (:taxlaw/out-of-scope support)"
+  :replace "             :taxlaw/out-of-scope nil"}
+
+ {:id :a-genuinely-absent-jurisdiction-still-says-so
+  :invariant "the old sentence survives for a jurisdiction really not catalogued"
+  :file "src/bookkeeping/governor.cljc"
+  :find "                       (str \"仕入税額控除を主張しているが、法域 \"\n                            (pr-str juris)\n                            \" は kotoba.taxlaw に無い（未検査は合格ではない）\"))})"
+  :replace "                       (str \"仕入税額控除を主張しているが、法域 \"\n                            (pr-str juris)\n                            \" では検査できない（未検査は合格ではない）\"))})"}
+
+ {:id :an-eu-invoice-with-no-number-is-refused
+  :invariant "rule 6 fires in the EU as it does in Japan"
+  :file "src/bookkeeping/governor.cljc"
+  :find "      (and (= :checked (:taxlaw/coverage support))\n           (false? (:taxlaw/supported? support)))"
+  :replace "      (and (= :checked (:taxlaw/coverage support))\n           (nil? (:taxlaw/supported? support)))"}
+
+ {:id :the-preservation-rule-reads-its-own-coverage
+  :invariant "an EU electronic invoice on paper is not held on Japan's article"
+  :file "src/bookkeeping/governor.cljc"
+  :find "      (and (= :checked (:taxlaw/coverage preservation))\n           (false? (:taxlaw/preserved? preservation)))"
+  :replace "      (and (not= :nope (:taxlaw/coverage preservation))\n           (not (true? (:taxlaw/preserved? preservation))))"}
+
+ {:id :the-taxlaw-pin-is-the-one-with-two-more-jurisdictions
+  :invariant "the whole point of the bump — an older pin has neither"
+  :file "deps.edn"
+  :find "\"d2663b54aad645244e61ae548054943b1229c1fc\""
+  :replace "\"ad431b4f8a07474e2c0b8f4bf2efba3fca3e03f1\""}]
