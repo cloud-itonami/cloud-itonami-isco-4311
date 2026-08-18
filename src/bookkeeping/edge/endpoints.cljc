@@ -4,6 +4,8 @@
       POST /api/entry           submit a journal entry draft
       POST /api/entries         submit many, and get one outcome each
       GET  /api/trial-balance   read what the committed postings add up to
+      GET  /api/journal         仕訳帳 — every posting, in commit order
+      GET  /api/ledger/:account 総勘定元帳 — one account, with a running balance
       GET  /api/statements      read 貸借対照表 / 損益計算書
 
   and nothing else. Per `manifest/repository-rules.edn` an itonami actor is
@@ -47,6 +49,7 @@
             [bookkeeping.store :as store]
             [bookkeeping.trial-balance :as tb]
             [bookkeeping.statements :as statements]
+            [bookkeeping.motochou :as motochou]
             [kotoba.shohyo :as shohyo]
             #?(:clj [clojure.edn :as edn] :cljs [cljs.reader :as edn])
             #?(:cljs [cacao.edge.verify :as cacao])))
@@ -386,6 +389,56 @@
                 :unclassified (get-in r [:statements/shohyo :shohyo/unclassified])
                 :out-of-balance (shohyo-out-of-balance r)
                 :by-currency (statement-bodies r)}}))))
+
+(defn journal-core
+  "`GET /api/journal`. Read-only, the caller's own book.
+
+    503 / 403  as everywhere else
+    200        the 仕訳帳, in commit order"
+  [store allowlist caller-did]
+  (cond
+    (nil? allowlist) {:status 503 :body {:ok false :error "no allow-list configured"}}
+    (nil? (client-for allowlist caller-did))
+    {:status 403 :body {:ok false :error "caller not permitted"}}
+    :else
+    (let [client-id (client-for allowlist caller-did)
+          j (motochou/journal (store/postings-of store client-id))]
+      {:status 200
+       :body {:ok true :client client-id
+              :entry-count (:motochou/entry-count j)
+              :entries (:motochou/entries j)}})))
+
+(defn ledger-core
+  "`GET /api/ledger/:account`. Read-only, the caller's own book.
+
+    503 / 403  as everywhere else
+    404        the chart does not name that account — **not** an empty 200,
+               because a blank page cannot be told from a typo
+    200        the 総勘定元帳 for it, per currency, with a running balance
+
+  `:accounts` is returned on the 404 rather than only an error string: an
+  account that received a posting while absent from the chart is real
+  activity, and a caller looking for it needs to see that it exists before
+  it can be classified."
+  [store allowlist caller-did account-name]
+  (cond
+    (nil? allowlist) {:status 503 :body {:ok false :error "no allow-list configured"}}
+    (nil? (client-for allowlist caller-did))
+    {:status 403 :body {:ok false :error "caller not permitted"}}
+    :else
+    (let [client-id (client-for allowlist caller-did)
+          postings (store/postings-of store client-id)
+          chart (or (store/chart-of store client-id) {})
+          r (motochou/account chart postings account-name)]
+      (if (= :unknown-account (:motochou/coverage r))
+        {:status 404
+         :body {:ok false :error "no such account in the chart of accounts"
+                :account account-name
+                :accounts-with-activity (mapv (fn [[a c]] {:account a :currency c})
+                                              (motochou/accounts-with-activity postings))}}
+        {:status 200
+         :body {:ok true :client client-id :account account-name
+                :by-currency (:motochou/by-currency r)}}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Cloudflare entry points
