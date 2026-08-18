@@ -454,4 +454,139 @@
   :invariant "the whole point of the bump — an older pin has neither"
   :file "deps.edn"
   :find "\"d2663b54aad645244e61ae548054943b1229c1fc\""
-  :replace "\"ad431b4f8a07474e2c0b8f4bf2efba3fca3e03f1\""}]
+  :replace "\"ad431b4f8a07474e2c0b8f4bf2efba3fca3e03f1\""}
+ {:id :shinkoku-undated-is-never-outside
+  :invariant "an entry with no 取引年月日 is :unplaceable, never :out — :out files the return without it and reports nothing"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "      (not (posting/valid-transaction-date? d)) :unplaceable"
+  :replace "      (not (posting/valid-transaction-date? d)) :out"}
+
+ {:id :shinkoku-period-includes-its-first-day
+  :invariant "課税期間 is inclusive at :from — an off-by-one drops 1 January's entries out of the year"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "      (neg? (compare d (:from period))) :out"
+  :replace "      (not (pos? (compare d (:from period)))) :out"}
+
+ {:id :shinkoku-period-includes-its-last-day
+  :invariant "and inclusive at :to"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "      (pos? (compare d (:to period))) :out"
+  :replace "      (not (neg? (compare d (:to period)))) :out"}
+
+ {:id :shinkoku-one-undated-entry-taints-every-period
+  :invariant "unplaceable is measured over the WHOLE book — there is no period an undated entry can be excluded from"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "        stranded (when (empty? problems) (unplaceable postings))"
+  :replace "        stranded (when (empty? problems) (unplaceable []))"}
+
+ {:id :shinkoku-a-reversed-period-is-reported
+  :invariant "an impossible 課税期間 and a quiet one are different findings"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "             (pos? (compare from to)))"
+  :replace "             (neg? (compare from to)))"}
+
+ {:id :shinkoku-a-non-map-period-says-so
+  :invariant ":no-period names the fault; falling through to :bad-from/:bad-to blames the wrong thing"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "    (not (map? period))"
+  :replace "    (nil? period)"}
+
+ {:id :shinkoku-the-regime-is-read-strictly
+  :invariant "\"general\" is not :general — a loose read lets a string decide a tax election"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "                 (not (contains? regimes regime)) :regime-not-declared"
+  :replace "                 (nil? regime) :regime-not-declared"}
+
+ {:id :shinkoku-only-一般課税-computes
+  :invariant "簡易課税 (第三十七条第一項) computes a different return; it must not fall through to this one"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "                 (not= :general regime) :regime-not-general"
+  :replace "                 (= :exempt regime) :regime-not-general"}
+
+ {:id :shinkoku-the-jurisdiction-gate-is-this-file-s-own-reading
+  :invariant "adding a jurisdiction must not widen a pass — 消費税法 第四十五条 reaches [:jp] and nothing else"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "  #{[:jp]})"
+  :replace "  #{[:jp] [:us]})"}
+
+ {:id :shinkoku-an-unclaimed-entry-was-never-checked
+  :invariant "the governor's 第三十条第七項 rules fire only on a claim, so an entry that claimed nothing has an unverified basis"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "    (not= :input-tax-credit (:tax-treatment (:payload record)))"
+  :replace "    (= :nothing (:tax-treatment (:payload record)))"}
+
+ {:id :shinkoku-a-malformed-登録番号-is-not-checked
+  :invariant "taxlaw answering :supported? false is a refusal, not an absence"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "        (false? (:taxlaw/supported? support))"
+  :replace "        (nil? (:taxlaw/supported? support))"}
+
+ {:id :shinkoku-input-tax-is-debit-normal
+  :invariant "a credit to 仮払消費税 reverses the tax; adding it would credit a reversal twice"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "                        (if (= :debit side) amount (- amount))))))"
+  :replace "                        amount))))"}
+
+ {:id :shinkoku-only-the-input-role-is-input-tax
+  :invariant "仮受消費税 is 第二号's side of the identity and must never enter the deduction"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "              (if-not (= :input (:tax-role a))"
+  :replace "              (if-not (= :output (:tax-role a))"}
+
+ {:id :shinkoku-the-partition-reports-what-it-examined
+  :invariant "zero not-checked out of zero examined and out of forty are different answers"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "    {:shinkoku/examined (count rows)"
+  :replace "    {:shinkoku/examined 0"}
+
+ {:id :shinkoku-the-amounts-sum-rather-than-overwrite
+  :invariant "two postings at one rate are two amounts; merge would report only the last"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "(merge-with + acc (:input-tax r))"
+  :replace "(merge acc (:input-tax r))"}
+
+ {:id :shinkoku-the-unverified-amount-is-the-unverified-one
+  :invariant "reporting the checked total under :not-checked-amount would understate the exposure to zero"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "     :shinkoku/not-checked-amount (total not-checked)}))"
+  :replace "     :shinkoku/not-checked-amount (total checked)}))"}
+
+ {:id :shinkoku-unverified-input-tax-is-not-a-pass
+  :invariant "the whole point — an entry whose 第三十条第七項 basis nobody checked must not ride into a :computed return"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "                 (seq (:shinkoku/not-checked basis)) :input-tax-unverified"
+  :replace "                 (seq []) :input-tax-unverified"}
+
+ {:id :shinkoku-the-join-is-the-actors-own-content-id
+  :invariant "取引年月日 is part of the posting's identity; dropping it from the join loses every dated entry's record"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "                          :transaction-date transaction-date"
+  :replace "                          :transaction-date nil"}
+
+ {:id :shinkoku-only-draft-entries-ever-produced-a-posting
+  :invariant ":reconcile and :close-period are not journal entries and must not be joined to one"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "    (when (= :draft-entry op)"
+  :replace "    (when (not= :nothing op)"}
+
+ {:id :shinkoku-an-empty-book-is-not-a-quiet-quarter
+  :invariant "the evidence floor in the sentence: 空である is said only when the book is empty"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "    (if (zero? (:entry-count ctx))"
+  :replace "    (if (pos? (:entry-count ctx))"}
+
+ {:id :shinkoku-消費税法-is-not-stamped-on-a-foreign-book
+  :invariant "citing a Japanese act on a verdict it cannot reach puts the same mistake in a different key"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "     :shinkoku/provisions (when (not= :unchecked-jurisdiction status)\n                            (mapv :article (:articles provisions)))"
+  :replace "     :shinkoku/provisions (mapv :article (:articles provisions))"}
+ {:id :advisor-carries-the-tax-treatment-claim
+  :invariant "the governor's 第三十条第七項 rules fire only on a proposal claiming :input-tax-credit — an advisor that drops the key makes rules 5 and 6 unreachable through the actor"
+  :file "src/bookkeeping/advisor.cljc"
+  :find "   :tax-treatment tax-treatment"
+  :replace "   :tax-treatment nil"}
+ {:id :shinkoku-a-bare-keyword-jurisdiction-normalizes
+  :invariant "kotoba.taxlaw accepts :jp and [:jp]; comparing the raw value against read-for silently answers `not read` for a client record that stores the keyword"
+  :file "src/bookkeeping/shinkoku.cljc"
+  :find "                 (not (contains? read-for (if (vector? jurisdiction)\n                                            jurisdiction\n                                            (when (some? jurisdiction) [jurisdiction]))))"
+  :replace "                 (not (contains? read-for jurisdiction))"}]

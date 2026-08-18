@@ -14,6 +14,8 @@
     {:op :draft-entry|:reconcile|:issue-invoice|:close-period
      :effect :propose        ; the advisor NEVER emits a raw store write
      :source-doc str-or-nil  ; cited source document id (:draft-entry)
+     :tax-treatment kw-or-nil ; e.g. :input-tax-credit — a CLAIM the
+                              ; governor then verifies, never a finding
      :transaction-date str-or-nil ; 取引年月日, ISO-8601 YYYY-MM-DD
      :counterparty str-or-nil     ; 取引先
      :lines [{:side :dr|:cr :account str :amount n} ...]
@@ -33,12 +35,27 @@
   "Deterministic mock inference: reads the request's declared fields
   straight through (a stand-in for what an LLM would extract from a
   source document image / free text), with a stake-derived confidence."
-  [_store {:keys [op stake source-doc lines transaction-date counterparty]
+  [_store {:keys [op stake source-doc lines transaction-date counterparty
+                  tax-treatment]
            :as request}]
   {:op op
    :effect :propose
    :source-doc source-doc
    :lines (vec lines)
+   ;; 税務処理の主張 — read straight through, like every other declared field
+   ;; here. Measured 2026-08-18: this key was the ONE the mock dropped, and
+   ;; dropping it made the governor's rules 5 and 6 (unchecked jurisdiction,
+   ;; qualified invoice — 消費税法 第三十条第七項) structurally unreachable
+   ;; through `bookkeeping.actor`, since they fire only on a proposal
+   ;; claiming :input-tax-credit and no proposal the default advisor built
+   ;; could carry one. They were exercised only by calling the governor
+   ;; directly. A rule that no path can reach is not enforced.
+   ;;
+   ;; It is still the ADVISOR's claim and not the truth: the governor
+   ;; verifies it against the registered source document, and
+   ;; `bookkeeping.shinkoku` reports every posting whose claim was never
+   ;; made as :no-tax-claim rather than as credited.
+   :tax-treatment tax-treatment
    ;; 取引年月日 / 取引先 — two of the three 記録項目 規則第五条第五項第一号ハ
    ;; requires a 優良帳簿 to be searchable by. Read straight through like
    ;; :source-doc: the advisor extracts, it does not invent, and a fabricated
