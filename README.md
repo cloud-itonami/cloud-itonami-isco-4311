@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 99 tests / 320 assertions green.
+accounting actor. 108 tests / 370 assertions green.
 
 Five bookkeeping-specific HARD invariants (never approvable past):
 
@@ -130,6 +130,43 @@ declares no `:origin` is not held; it asserted nothing. But `:tax` carries
 was not checked* rather than an unqualified approval — the same device as
 kintai's `:unevaluated` and tehai's `:tax`. Measured: dropping that key
 reddens three tests.
+
+## 消費税 — the figures a 申告 starts from, and what they are not
+
+`bookkeeping.shohizei` aggregates the ledger's 仮受消費税 / 仮払消費税, **by
+rate**, and **refuses to emit a 納付税額**. 消費税法 第四十五条第一項 is
+quoted in `provisions` so the refusal can be checked rather than believed
+(revision `363AC0000000108_20260401_508AC0000000012`, retrieved 2026-08-18).
+
+**Two things the article requires that a single balance cannot give:**
+
+第一号 and 第二号 both say **税率の異なるごとに区分した**. One 仮受消費税
+account covering 10% and 軽減 8% satisfies neither, and no arithmetic
+recovers the split — so a tax account with no `:tax-rate` yields
+`:rates-not-declared` rather than a total that looks like an answer.
+
+第三号 makes the deduction **broader than 仮払消費税**: 仕入れに係る消費税額
+*and* 対価の返還等 (第三十八条, 第三十八条の二) *and* 貸倒れ (第三十九条). A
+ledger's input-tax account is one of four.
+
+So there is **no `:tax-payable` key**. `:shohizei/not-computed` lists what
+stands between these figures and 第四号 — 対価の返還等, 貸倒れ, 課税売上割合
+and 個別対応/一括比例, 簡易課税, 端数処理, 中間納付 — each with the article
+and the reason. Emitting a number labelled 納付税額 would be the same class
+of error as a balance sheet that omits an account: arithmetically clean,
+wrong, and silent about it.
+
+`difference` is called a difference. It is 仮受 minus 仮払 per rate — the
+working figure a bookkeeper recognises, and not 第四号's 残額.
+
+`filing-deadline` gives 第四十五条第一項本文's 課税期間の末日の翌日から二月
+以内, and reports `:clamped?` when adding two months overflowed a month end,
+because that clamp is a convention and not the article's.
+
+Measured, all seven mutations red: aggregate without declared rates (4),
+collapse the rates into one bucket (7+2), stop negating the credit-normal
+output account (5), empty the not-computed list (5), aggregate with no tax
+accounts (1), make the deadline one month (4), clamp silently (1).
 
 ## A retry must not double the books
 
