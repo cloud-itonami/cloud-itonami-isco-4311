@@ -86,7 +86,18 @@
   (postings-of [_ client-id]
     (vec (get-in @a [:postings client-id] [])))
   (commit-posting! [s client-id posting]
-    (swap! a update-in [:postings client-id] (fnil conj []) posting) s)
+    ;; Idempotent on the posting id. A carrier that retries is normal, and
+    ;; before this a retry appended a SECOND posting under the same id and
+    ;; doubled the trial balance. Appending is still the only mutation --
+    ;; nothing already committed is replaced, because a posting that changed
+    ;; under a stable id would be an edit to the ledger.
+    (swap! a update-in [:postings client-id]
+           (fn [ps]
+             (let [ps (or ps [])]
+               (if (some #(= (:ledger/posting posting) (:ledger/posting %)) ps)
+                 ps
+                 (conj ps posting)))))
+    s)
   (chart-of [_ client-id] (get-in @a [:charts client-id]))
   (register-chart! [s client-id chart]
     (swap! a assoc-in [:charts client-id] chart) s)
@@ -128,9 +139,15 @@
           (filterv #(= client-id (:client-id %))
                    (ls/read-stream conn :posting/seq :posting/edn))))
   (commit-posting! [s client-id posting]
-    (ls/append-blob! conn :posting/seq :posting/edn
-                     (next-seq conn :posting/seq)
-                     {:client-id client-id :posting posting}) s)
+    ;; Same idempotency as MemStore, and the contract test holds them to it
+    ;; together -- a backend that double-posted on retry would double one
+    ;; client's books and not the other's.
+    (when-not (some #(= (:ledger/posting posting) (:ledger/posting %))
+                    (postings-of s client-id))
+      (ls/append-blob! conn :posting/seq :posting/edn
+                       (next-seq conn :posting/seq)
+                       {:client-id client-id :posting posting}))
+    s)
   (append-ledger! [s fact]
     (ls/append-blob! conn :ledger/seq :ledger/fact
                      (next-seq conn :ledger/seq) fact) s))
