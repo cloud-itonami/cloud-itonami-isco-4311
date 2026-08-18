@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 119 tests / 395 assertions green.
+accounting actor. 129 tests / 429 assertions green.
 
 Five bookkeeping-specific HARD invariants (never approvable past):
 
@@ -130,6 +130,42 @@ declares no `:origin` is not held; it asserted nothing. But `:tax` carries
 was not checked* rather than an unqualified approval — the same device as
 kintai's `:unevaluated` and tehai's `:tax`. Measured: dropping that key
 reddens three tests.
+
+## 元帳 and 仕訳帳
+
+The plane could say what an account's *balance* was and what the statements
+looked like. Neither answers what a bookkeeper asks first: **what happened to
+this account, in order.** A balance is a number you have to trust; a 元帳 is
+the number with its working shown.
+
+**Order is the whole point.** A 総勘定元帳 whose lines are not in committed
+order is a set with a running total drawn on it, and the total is then
+meaningless. `store/postings-of` returns commit order — both backends are
+held to that by the contract test — and `bookkeeping.motochou` does not
+re-sort. A test asserts it does not: given a different order it *reports*
+that order rather than fixing it, because silently substituting an order for
+the one that was enforced is the failure worth catching.
+
+**Per currency, again.** One running total across currencies produces a
+column that looks exactly like a ledger and means nothing — the same failure
+this actor shipped once at the entry level.
+
+**Two ways to be empty, and they differ.** An account the chart does not
+name is `404`, not an empty `200`: a blank page cannot be told from a typo.
+An account that is known and had no activity is `200` with nothing in it.
+And the 404 lists `:accounts-with-activity`, because an account that received
+a posting while absent from the chart is real activity and must not become
+invisible just because the ledger refuses to open it.
+
+The journal reports the `:balanced?` flag `kotoba.banking` already put on
+each posting rather than recomputing it — a second opinion here could
+disagree with the one the governor actually enforced.
+
+Measured, all seven mutations red: sort the ledger by posting id (2),
+run one balance across currencies (13), add credits instead of subtracting
+(5), open an unknown account as an empty ledger (3), offset the running
+balance by one line (4), recompute `:balanced?` (2), hide chart-less accounts
+from the activity list (1).
 
 ## The carrier's route
 
@@ -333,6 +369,8 @@ Two routes, and nothing else:
 POST /api/entry           submit a journal entry draft
 POST /api/entries         submit many, and get one outcome each
 GET  /api/trial-balance   read what the committed postings add up to
+GET  /api/journal         仕訳帳 — every posting, in commit order
+GET  /api/ledger/:account 総勘定元帳 — one account, with a running balance
 GET  /api/statements      read 貸借対照表 / 損益計算書
 ```
 
