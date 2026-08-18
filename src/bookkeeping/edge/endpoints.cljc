@@ -3,6 +3,7 @@
 
       POST /api/entry           submit a journal entry draft
       GET  /api/trial-balance   read what the committed postings add up to
+      GET  /api/statements      read 貸借対照表 / 損益計算書
 
   and nothing else. Per `manifest/repository-rules.edn` an itonami actor is
   `:on-demand`: it answers a request and stops.
@@ -44,6 +45,8 @@
   (:require [bookkeeping.actor :as actor]
             [bookkeeping.store :as store]
             [bookkeeping.trial-balance :as tb]
+            [bookkeeping.statements :as statements]
+            [kotoba.shohyo :as shohyo]
             #?(:clj [clojure.edn :as edn] :cljs [cljs.reader :as edn])
             #?(:cljs [cacao.edge.verify :as cacao])))
 
@@ -217,6 +220,76 @@
               :balances (into {} (map (fn [[[account currency] v]]
                                         [(str account "/" currency) v]))
                               (:trial-balance/balances r))}})))
+
+;; ---------------------------------------------------------------------------
+;; GET /api/statements
+;; ---------------------------------------------------------------------------
+
+(defn- shohyo-out-of-balance [r]
+  (shohyo/out-of-balance (:statements/shohyo r)))
+
+(defn- ladder-body [l]
+  (if (= :not-declared (:shohyo.jp/coverage l))
+    {:coverage "not-declared" :missing (mapv name (:shohyo.jp/missing-sections l))}
+    (into {:coverage "checked"}
+          (map (fn [k] [(name k) (select-keys (get l k) [:amount :label :article])]))
+          [:shohyo.jp/gross :shohyo.jp/operating
+           :shohyo.jp/ordinary :shohyo.jp/pretax])))
+
+(defn- statement-bodies [r]
+  (into {}
+        (map (fn [[currency v]]
+               [currency
+                {:bs (mapv #(select-keys % [:account :type :section :presented]) (:bs v))
+                 :pl (mapv #(select-keys % [:account :type :section :presented]) (:pl v))
+                 :totals (:totals v)
+                 :equation (:equation v)
+                 :jp (ladder-body (get-in r [:statements/jp currency]))}]))
+        (get-in r [:statements/shohyo :shohyo/by-currency])))
+
+(defn statements-core
+  "`GET /api/statements`. `caller-did` is already verified. Read-only.
+
+    503  no allow-list configured
+    403  caller not on the allow-list
+    409  no chart registered, or a chart the regulation does not accept —
+         a 4xx and not an empty 200, because 「we cannot classify your
+         accounts」 is a refusal the caller has to act on, and an empty
+         statement is exactly what it would otherwise look like
+    200  the caller's OWN statements
+
+  `:complete?` is reported separately from the 200. The request succeeded;
+  whether the statement is whole is a different question, and collapsing
+  them would let a caller read 200 as `these books are finished`."
+  [store allowlist caller-did]
+  (cond
+    (nil? allowlist)
+    {:status 503 :body {:ok false :error "no allow-list configured"}}
+
+    (nil? (client-for allowlist caller-did))
+    {:status 403 :body {:ok false :error "caller not permitted"}}
+
+    :else
+    (let [client-id (client-for allowlist caller-did)
+          r (statements/for-client store client-id)]
+      (case (:statements/coverage r)
+        :no-chart
+        {:status 409 :body {:ok false :error "no chart of accounts registered"
+                            :detail (:statements/why r)}}
+
+        :chart-invalid
+        {:status 409 :body {:ok false :error "chart of accounts is not usable"
+                            :problems (mapv #(select-keys % [:account :problem :detail])
+                                            (:statements/chart-problems r))}}
+
+        {:status 200
+         :body {:ok true :client client-id
+                :complete? (:statements/complete? r)
+                ;; Named, always. An unclassified account is the one thing a
+                ;; reader of a balance sheet cannot see for themselves.
+                :unclassified (get-in r [:statements/shohyo :shohyo/unclassified])
+                :out-of-balance (shohyo-out-of-balance r)
+                :by-currency (statement-bodies r)}}))))
 
 ;; ---------------------------------------------------------------------------
 ;; Cloudflare entry points

@@ -38,7 +38,13 @@ io.github.kotoba-lang/langgraph
         ;; read-stream / append-blob!) is not hand-rolled here.
         io.github.kotoba-lang/langchain-store
         {:git/url "https://github.com/kotoba-lang/langchain-store.git"
-         :git/sha "b986669f72276568c97e1fa5b331a5ff3017bf69"}}
+         :git/sha "b986669f72276568c97e1fa5b331a5ff3017bf69"}
+        ;; 諸表 — the trial balance folded into 貸借対照表 / 損益計算書, and
+        ;; the 会社計算規則 区分. It refuses to guess what an account is, so
+        ;; the chart is registered per client rather than defaulted.
+        io.github.kotoba-lang/shohyo
+        {:git/url "https://github.com/kotoba-lang/shohyo.git"
+         :git/sha "24d368942e5ba3b8e9b20bdc9fb97045b69af651"}}
  :aliases
  {:test {:extra-paths ["test"]
          :extra-deps {io.github.cognitect-labs/test-runner
