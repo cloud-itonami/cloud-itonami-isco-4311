@@ -2,6 +2,7 @@
   "The HTTP surface this actor exposes — exactly two routes:
 
       POST /api/entry           submit a journal entry draft
+      POST /api/entries         submit many, and get one outcome each
       GET  /api/trial-balance   read what the committed postings add up to
       GET  /api/statements      read 貸借対照表 / 損益計算書
 
@@ -152,11 +153,14 @@
     (if-let [body (parse-entry-body raw-body)]
       (let [client-id (client-for allowlist caller-did)
             g (actor/build-graph {:store store})
+            before (into #{} (map :ledger/posting) (store/postings-of store client-id))
             r (actor/run-request! g {:client-id client-id :op :draft-entry
                                      :stake :low
                                      :source-doc (:source-doc body)
                                      :lines (:lines body)}
                                   {} (str "edge-" caller-did "-" (:source-doc body)))
+            posting-outcome {:duplicate? (contains? before
+                                                    (get-in r [:state :posting :ledger/posting]))}
             disposition (get-in r [:state :disposition])
             verdict (get-in r [:state :verdict])]
         (cond
@@ -165,6 +169,14 @@
                 ps (store/postings-of store client-id)]
             {:status 200
              :body {:ok true :ephemeral (= :ephemeral mode) :client client-id
+                    ;; Whether this call ADDED the posting or found it already
+                    ;; there. `commit-posting!` is idempotent on the posting
+                    ;; id, so a retry is safe -- but until this key existed a
+                    ;; retry and a first post returned byte-identical 200s and
+                    ;; a carrier could not tell whether it had just written or
+                    ;; merely re-sent. Idempotent and indistinguishable is only
+                    ;; half of what a carrier needs.
+                    :duplicate? (boolean (:duplicate? posting-outcome))
                     ;; nil when the entry produced none. Reported rather
                     ;; than omitted: an entry that committed without
                     ;; posting is exactly what a caller must be able to see.
@@ -183,6 +195,90 @@
                   :violations (mapv #(select-keys % [:rule :detail])
                                     (:violations verdict))}}))
       {:status 400 :body {:ok false :error "invalid request body"}})))
+
+(def max-batch
+  "A cap, because an uncapped batch is a way to hold the actor for an
+  unbounded time on one request. 200 is a number, not a measurement -- it is
+  chosen to be obviously enough for a day's entries and obviously not
+  unbounded, and it is named so a caller learns the limit from the refusal
+  rather than from a timeout."
+  200)
+
+(defn entries-core!
+  "`POST /api/entries`. `caller-did` is already verified. The carrier's route.
+
+    503  no allow-list configured
+    403  caller not on the allow-list
+    400  the body is not a non-empty vector of entries, or is over `max-batch`
+    207  one outcome per entry, in the order submitted
+
+  ## Always 207, never 200
+
+  A batch of fifty with three refusals is not a success and is not a
+  failure, and collapsing it to either loses the three or discards the
+  forty-seven. So the status is the same whatever the outcomes are, and the
+  ANSWER IS THE PER-ENTRY LIST -- a caller that reads only the status learns
+  nothing, which is the correct amount to learn from a status here.
+
+  `:summary` counts the outcomes. It is a convenience over `:results` and
+  never a substitute: `:posted`, `:duplicate`, `:held` and `:rejected` are
+  reported separately, so no single number can be read as \"it worked\".
+
+  ## Not atomic, and that is the design
+
+  Entries are applied one at a time and an earlier refusal does not stop a
+  later entry. Making it all-or-nothing would mean one malformed line in a
+  carrier's batch discarded a day of good entries, and the actor has no
+  transaction to roll back into anyway -- `commit-posting!` has already
+  appended by the time the next entry is read. Stated rather than left for
+  someone to discover.
+
+  Retrying the whole batch is safe: posting ids are content-addressed and
+  `commit-posting!` is idempotent, so a re-sent entry comes back
+  `:duplicate` rather than posting twice."
+  [store mode allowlist caller-did raw-body]
+  (cond
+    (nil? allowlist)
+    {:status 503 :body {:ok false :error "no allow-list configured"}}
+
+    (nil? (client-for allowlist caller-did))
+    {:status 403 :body {:ok false :error "caller not permitted"}}
+
+    :else
+    (let [parsed (try (edn/read-string raw-body)
+                      (catch #?(:clj Exception :cljs :default) _ nil))]
+      (cond
+        (not (and (vector? parsed) (seq parsed)))
+        {:status 400 :body {:ok false :error "body must be a non-empty vector of entries"}}
+
+        (> (count parsed) max-batch)
+        {:status 400 :body {:ok false :error "batch too large"
+                            :max max-batch :submitted (count parsed)}}
+
+        :else
+        (let [results
+              (mapv (fn [entry]
+                      (let [one (draft-entry-core! store mode allowlist caller-did
+                                                   (pr-str entry))]
+                        {:status (:status one)
+                         :outcome (cond
+                                    (not= 200 (:status one))
+                                    (case (long (:status one))
+                                      409 :held
+                                      202 :awaiting-approval
+                                      :rejected)
+                                    (get-in one [:body :duplicate?]) :duplicate
+                                    :else :posted)
+                         :source-doc (:source-doc entry)
+                         :posting (get-in one [:body :posting])
+                         :violations (get-in one [:body :violations])
+                         :error (get-in one [:body :error])}))
+                    parsed)]
+          {:status 207
+           :body {:client (client-for allowlist caller-did)
+                  :submitted (count parsed)
+                  :summary (frequencies (map :outcome results))
+                  :results results}})))))
 
 ;; ---------------------------------------------------------------------------
 ;; GET /api/trial-balance

@@ -9,7 +9,7 @@ wave, no robotics gate.
 BookkeepingClerksGovernor as a langgraph StateGraph
 (`intake → advise → govern → decide → commit/hold`, human-approval
 interrupt for escalations), modeled on cloud-itonami-isco-2411's
-accounting actor. 108 tests / 370 assertions green.
+accounting actor. 119 tests / 395 assertions green.
 
 Five bookkeeping-specific HARD invariants (never approvable past):
 
@@ -130,6 +130,45 @@ declares no `:origin` is not held; it asserted nothing. But `:tax` carries
 was not checked* rather than an unqualified approval — the same device as
 kintai's `:unevaluated` and tehai's `:tax`. Measured: dropping that key
 reddens three tests.
+
+## The carrier's route
+
+Four actors (`keihi`, `isco-4313`, `tehai`, `shiharai-actor`) now emit
+`:draft-entry` requests. `POST /api/entries` is where a carrier delivers
+them.
+
+### Always 207, never 200
+
+A batch of fifty with three refusals is not a success and is not a failure.
+Collapsing it to 200 loses the three; collapsing it to 4xx discards the
+forty-seven. **The status is the same whatever happens, and the answer is the
+per-entry list** — a caller that reads only the status learns nothing, which
+is the right amount to learn from a status here.
+
+`:summary` counts outcomes as `:posted` / `:duplicate` / `:held` /
+`:rejected`, separately, so no single number can be read as "it worked".
+Results are in submission order, because a carrier reconciles by position.
+
+### Not atomic, deliberately
+
+An earlier refusal does not stop a later entry. All-or-nothing would let one
+malformed line discard a day of good entries, and there is no transaction to
+roll back into — `commit-posting!` has already appended by the time the next
+entry is read.
+
+### Idempotent *and* distinguishable
+
+Re-sending a batch is safe: posting ids are content-addressed and
+`commit-posting!` is idempotent. But **idempotent and indistinguishable is
+only half of what a carrier needs** — until `:duplicate?` existed, a retry
+and a first post returned byte-identical 200s and the carrier could not tell
+whether it had just written or merely re-sent. Both the single and the batch
+route now say which.
+
+Measured, all eight mutations red: collapse an all-posted batch to 200 (2),
+report a duplicate as posted (1), hard-code `:duplicate?` false (2), filter
+the failures out of the results (6), accept an empty batch (1), remove the
+size cap (2), stop at the first refusal (2), reorder the results (1).
 
 ## 消費税 — the figures a 申告 starts from, and what they are not
 
@@ -292,6 +331,7 @@ Two routes, and nothing else:
 
 ```
 POST /api/entry           submit a journal entry draft
+POST /api/entries         submit many, and get one outcome each
 GET  /api/trial-balance   read what the committed postings add up to
 GET  /api/statements      read 貸借対照表 / 損益計算書
 ```
