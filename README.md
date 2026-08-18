@@ -537,6 +537,140 @@ no mutations. Three of the 53 were added last precisely because they looked
 unmeasured, and all three survived the first run: the echoed conditions, the
 lines on a result row, and the `:why` sentence. Each is now tested.
 
+## 消費税申告 — what the books supply, and the inputs they cannot
+
+`bookkeeping.shinkoku` asks the return's question of this ledger:
+**課税売上に係る消費税額 − 課税仕入れ等に係る消費税額 = 納付税額.** It answers
+the parts a book of postings can answer, and **names every input it does not
+have**, with which statute was read and which was not.
+
+There is **no `:shinkoku/tax-payable`** — `bookkeeping.shohizei`'s refusal is
+extended here, not overturned — and deliberately **no `filable?`**. The
+convenience predicate is `computed?`, because `:computed` means *this ledger
+supplied its part*, and a predicate named for filing would be read as an
+answer about filing.
+
+### What was read, verbatim
+
+消費税法 revision `363AC0000000108_20260401_508AC0000000012`, retrieved
+2026-08-18 from
+`GET https://laws.e-gov.go.jp/api/2/law_data/363AC0000000108?response_format=json`
+— nine articles quoted in `provisions`: 第九条第一項・第四項, 第十九条第一項,
+第二十九条, 第三十条第一項・第二項・第七項・第九項, 第三十七条第一項.
+
+**What was NOT read is data too** (`not-read`), and nothing in the file may
+branch on it: 施行令 第六十二条 (売上税額の積上げ計算), 施行令 第四十六条
+(仕入税額), 第二十八条 (課税標準), 第三十八条 / 第三十八条の二 / 第三十九条,
+地方税法 第七十二条の八十三 (地方消費税), 国税通則法 第百十八条第一項. Every
+`:read? false` entry of `not-computed` must name a law that appears in
+`not-read`, and every `:read? true` entry must name an article some file
+actually quoted — the suite holds all three lists to each other, so a statute
+cannot quietly acquire the authority of one that was read.
+
+### 課税標準額に対する消費税額 is NOT the 仮受消費税 balance
+
+Measured while writing this, and it is the trap that would have made the whole
+namespace a lie. 第二十九条 sets the rate at **百分の七・八** (軽減 六・二四).
+消費税法施行令 第七十条の十 — which `kotoba.taxlaw` implements as
+`consumption-tax-amount` — computes 消費税額等 at 10/100 and 8/100, and
+消費税額等 is 消費税 **plus 地方消費税**. Handing the invoice figure back as
+第四十五条第一項第二号's 消費税額 would overstate the national tax by 10/7.8,
+on every return, forever.
+
+So this namespace **does not call `consumption-tax-amount` at all** and reports
+no output tax. Two reasons, both named: the ledger holds the combined figure,
+and whether the tax is computed 割戻し or 積上げ is 施行令 第六十二条, which
+was not read. 積上げ / 割戻し is a real election a taxpayer makes; refusing it
+is the honest answer, not a limitation to work around.
+
+### 第三十条第七項 — the partition this namespace exists for
+
+Held entries never become postings, so a held claim cannot reach the trial
+balance. **That much is structural. The live hazard is the other one:** the
+governor's tax rules fire only on a proposal claiming
+`:tax-treatment :input-tax-credit`, so an entry that debits 仮払消費税 and
+claims nothing **was never checked against the article** — and its tax sits in
+the balance looking exactly like a verified one.
+
+`input-tax-basis` joins each posting back to the record that produced it, by
+recomputing `bookkeeping.posting/content-id` — the actor's own identity
+function, not a second one that agrees until it doesn't — and reports every
+posting whose basis was not checked **by id, document and amount**, in one of
+five buckets: `:no-record`, `:no-tax-claim`, `:source-doc-not-registered`,
+`:unchecked-jurisdiction`, `:unsupported-document`. A count tells an operator
+something is wrong and not which document to go and find.
+
+`:checked` is **not** called `deductible`, because it is not: 第三十条第二項
+(課税売上割合 and the 個別対応 / 一括比例 election) still applies and is
+answered nowhere in this repository.
+
+**Measured 2026-08-18: `bookkeeping.advisor`'s mock dropped `:tax-treatment`,
+so the governor's rules 5 and 6 were structurally unreachable through
+`bookkeeping.actor`** — they had only ever been exercised by calling the
+governor directly. It is now read straight through like every other declared
+field. A rule no path can reach is not enforced. The HTTP surface still does
+not carry it (`parse-entry-body` has no `:tax-treatment`), so an edge-submitted
+entry lands in `:no-tax-claim` and says so.
+
+### 課税期間 is supplied, never inferred
+
+第十九条第一項 makes the period a fact about the **taxpayer**: an 個人事業者
+files on the calendar year, a 法人 on its 事業年度, and either can shorten to
+three-month or one-month periods by filing a 届出書. None of those is in a book
+of postings, so defaulting to the calendar year would answer for the 法人 too.
+
+An entry with no usable 取引年月日 is `:unplaceable` and **never `:out`** — it
+might belong to this period, and calling it outside files the return without it
+and reports nothing. One undated entry taints **every** period, because there
+is no date to exclude it by.
+
+### 免税事業者 / 簡易課税 — read, and still an input
+
+第九条第一項 and 第三十七条第一項 were read, and reading them is what shows the
+refusal is structural rather than lazy: both hang on **基準期間における課税
+売上高** — the turnover two years back — and on a 届出書 filed with the
+税務署長. Neither is in this period's books. The regime is therefore declared
+by the operator and read as strictly as `kensaku` reads `declared?`: anything
+that is not literally `:general`, `:exempt` or `:simplified` is
+`:regime-not-declared`.
+
+第九条第一項 carries a carve-out that inverts the naive rule and is quoted for
+it: **適格請求書発行事業者を除く** — a registered issuer under ¥10,000,000 is
+not 免税.
+
+### Nine values, and exactly one is a pass
+
+| status | meaning |
+|---|---|
+| `:unchecked-jurisdiction` | this file did not read that jurisdiction's return articles. `read-for` is `#{[:jp]}` — a statement about this file, not a copy of the catalog, so a third VAT jurisdiction cannot silently acquire 消費税法 第四十五条. `kotoba.taxlaw`'s stated reason for `[:us]` / `[:eu]` rides along. |
+| `:regime-not-declared` | 免税 / 簡易課税 / 一般 was not stated. **Not a pass.** |
+| `:regime-not-general` | declared 免税事業者 or 簡易課税 — a different return, not a lenient version of this one. |
+| `:period-not-bounded` | no usable 課税期間 (第十九条第一項), with each fault named. |
+| `:entries-not-placeable` | an entry has no usable 取引年月日. Named. |
+| `:no-entries` | the book is empty, **or** nothing falls in the period. The counts distinguish them. |
+| `:figures-not-aggregable` | `bookkeeping.shohizei` could not separate by rate; its coverage rides along. |
+| `:input-tax-unverified` | input tax whose 第三十条第七項 basis was never checked. Named. |
+| `:computed` | **the pass** — and it does not mean a return can be filed, the same way `statements`'s `:ok` does not mean the statements are whole. |
+
+Every non-pass still carries the figures it reached, `:shinkoku/not-computed`,
+`:shinkoku/not-read` and an evidence floor (`:shinkoku/entry-count`,
+`:shinkoku/in-period-count`, `:shinkoku/examined`) — zero unverified out of
+zero examined and out of forty are different answers.
+
+Measured 2026-08-18: **23 mutations added, 23 killed**; four survived the first
+blind run and each was a real gap — a non-map period blamed the dates instead of
+the shape, `:unsupported-document` was never reached, every fixture had one
+posting per rate so `merge` and `merge-with +` agreed, and no fixture held a
+non-`:draft-entry` record. Each has a test naming the mutation that found it.
+The whole table then ran end to end: **87 mutations, 86 killed, 0 survived, 1
+unmeasured** — the unmeasured one is the pre-existing `deps.edn` pin swap, whose
+older taxlaw sha does not compile against the current source, so the suite never
+ran and the harness refuses to score it as a kill.
+
+The nine quoted articles are checked against the retrieval itself, not against
+memory: **59 fragments, every one a verbatim substring** of
+`363AC0000000108_20260401_508AC0000000012`.
+
 Escalations (always human sign-off): `:issue-invoice` (external-send),
 `:close-period` (hard to reverse), low confidence (< 0.6). The advisor
 only ever proposes (`:effect :propose`); every `commit-record!` is
