@@ -12,6 +12,7 @@
             [bookkeeping.motochou :as mc]
             [bookkeeping.kensaku :as k]
             [bookkeeping.store :as store]
+            [kotoba.taxlaw :as taxlaw]
             [bookkeeping.edge.endpoints :as e]))
 
 (defn- dr [a n c] {:side :dr :account a :amount n :currency c})
@@ -346,36 +347,36 @@
   (testing "ハ binds only a 保存義務者 claiming 法第八条第四項. The software
             cannot observe a tax election, so `nobody said` must be its own
             answer and must not be 適合"
-    (let [r (k/conformance {:postings (vec (take 2 books)) :declared? nil})]
+    (let [r (k/conformance {:jurisdiction :jp :postings (vec (take 2 books)) :declared? nil})]
       (is (= :not-declared (:kensaku/status r)))
       (is (nil? (:kensaku/declared r)))
       (is (false? (k/conformant? {:postings (vec (take 2 books)) :declared? nil}))))
     (testing "and a missing key is the same as an explicit nil"
-      (is (= :not-declared (:kensaku/status (k/conformance {:postings books})))))
+      (is (= :not-declared (:kensaku/status (k/conformance {:jurisdiction :jp :postings books})))))
     (testing "and anything that is not literally true or false is undeclared —
               a truthy string must not mean yes"
-      (is (= :not-declared (:kensaku/status (k/conformance {:postings (vec (take 2 books))
+      (is (= :not-declared (:kensaku/status (k/conformance {:jurisdiction :jp :postings (vec (take 2 books))
                                                             :declared? "yes"}))))
-      (is (= :not-declared (:kensaku/status (k/conformance {:postings (vec (take 2 books))
+      (is (= :not-declared (:kensaku/status (k/conformance {:jurisdiction :jp :postings (vec (take 2 books))
                                                             :declared? "no"})))))))
 
 (deftest not-applicable-is-distinguishable-from-compliant
   (testing "ordinary preservation under 法第四条第一項 requires no search at
             all — nothing was found compliant, the requirement was found not
             to apply"
-    (let [r (k/conformance {:postings books :declared? false})]
+    (let [r (k/conformance {:jurisdiction :jp :postings books :declared? false})]
       (is (= :not-applicable (:kensaku/status r)))
       (is (false? (:kensaku/declared r)))
       (is (false? (k/conformant? {:postings books :declared? false}))))))
 
 (deftest an-empty-book-has-not-been-shown-to-be-searchable
   (testing "the same reason trial-balance/balanced? is false for an empty set"
-    (is (= :no-entries (:kensaku/status (k/conformance {:postings [] :declared? true}))))
+    (is (= :no-entries (:kensaku/status (k/conformance {:jurisdiction :jp :postings [] :declared? true}))))
     (is (false? (k/conformant? {:postings [] :declared? true})))))
 
 (deftest entries-missing-a-record-item-are-counted-and-named
   (testing "`some entries` is not something an operator can act on"
-    (let [r (k/conformance {:postings books :declared? true})]
+    (let [r (k/conformance {:jurisdiction :jp :postings books :declared? true})]
       (is (= :non-conformant (:kensaku/status r)))
       (is (= 3 (:kensaku/entry-count r)))
       (is (= 1 (:kensaku/entries-missing-record-items r)))
@@ -387,10 +388,10 @@
 
 (deftest a-fully-recorded-book-with-a-declaration-is-conformant
   (let [full (vec (take 2 books))
-        r (k/conformance {:postings full :declared? true})]
+        r (k/conformance {:jurisdiction :jp :postings full :declared? true})]
     (is (= :conformant (:kensaku/status r)))
     (is (= 0 (:kensaku/entries-missing-record-items r)))
-    (is (true? (k/conformant? {:postings full :declared? true})))
+    (is (true? (k/conformant? {:jurisdiction :jp :postings full :declared? true})))
     (testing "and it cites the provision and where the text came from"
       (is (= "電子帳簿保存法施行規則 第五条第五項第一号ハ" (:kensaku/provision r)))
       (is (str/includes? (:url (:kensaku/law-source r)) "410M50000040043"))
@@ -400,7 +401,7 @@
   (testing "the entries carry all three 記録項目 and the software still
             cannot search them — ハ is about the FUNCTION as well as the data"
     (let [full (vec (take 2 books))
-          r (k/conformance {:postings full :declared? true :search-fn nil})]
+          r (k/conformance {:jurisdiction :jp :postings full :declared? true :search-fn nil})]
       (is (= :non-conformant (:kensaku/status r)))
       (is (= 0 (:kensaku/entries-missing-record-items r))
           "and it does not blame the data for it"))))
@@ -412,7 +413,7 @@
              :ledger/entries [{:ledger/account "a" :ledger/side :credit
                                :ledger/amount 5 :ledger/currency "JPY"}]}]
     (is (= [:amount] (k/missing-record-items odd)))
-    (is (= :non-conformant (:kensaku/status (k/conformance {:postings [odd] :declared? true}))))))
+    (is (= :non-conformant (:kensaku/status (k/conformance {:jurisdiction :jp :postings [odd] :declared? true}))))))
 
 ;; ===========================================================================
 ;; 9. the route
@@ -426,7 +427,8 @@
   ([] (fresh nil))
   ([declared?]
    (let [st (store/mem-store)]
-     (store/register-client! st (cond-> {:client-id "c-1" :name "Hanako's Bakery"}
+     (store/register-client! st (cond-> {:client-id "c-1" :name "Hanako's Bakery"
+                                         :jurisdiction :jp}
                                   (some? declared?) (assoc :yuryo-chobo-declared? declared?)))
      (store/register-client! st {:client-id "c-2" :name "Taro's Garage"})
      (store/register-source-doc! st {:doc-id "d1" :client-id "c-1" :kind :receipt})
@@ -506,6 +508,7 @@
 (defn- seeded []
   (let [st (store/mem-store)]
     (store/register-client! st {:client-id "c-1" :name "Hanako's Bakery"
+                                :jurisdiction :jp
                                 :yuryo-chobo-declared? true})
     (store/register-source-doc! st {:doc-id "d1" :client-id "c-1" :kind :receipt})
     st))
@@ -581,3 +584,91 @@
                                          (body :date "2026-03-01" :cp "Alpha Paper"))]
           (is (true? (get-in again [:body :duplicate?])))
           (is (= 1 (count (store/postings-of st "c-1")))))))))
+
+;; ---------------------------------------------------------------------------
+;; Which country's rule
+;;
+;; The first version of this namespace asked whether the operator was
+;; claiming 優良帳簿 and never asked which country's 優良帳簿. A ledger with
+;; no jurisdiction at all reported `:conformant` against 電子帳簿保存法施行
+;; 規則 第五条第五項第一号ハ — a Japanese ministerial ordinance that could not
+;; reach it. Measured 2026-08-18 on a USD book with `:jurisdiction nil`.
+;;
+;; It is the same defect the namespace was built to avoid, one level up: a
+;; check that could not apply returning what a check that applied and passed
+;; returns. `:declared?` was guarded and `:jurisdiction` was not.
+;; ---------------------------------------------------------------------------
+
+(deftest a-book-with-no-jurisdiction-is-not-conformant-with-a-japanese-ordinance
+  (let [full (mapv #(assoc % :bookkeeping/transaction-date "2026-03-01"
+                             :bookkeeping/counterparty "Acme")
+                   books)]
+    (doseq [j [nil :us [:eu :de] :atlantis]]
+      (let [r (k/conformance {:jurisdiction j :postings full :declared? true})]
+        (is (= :unchecked-jurisdiction (:kensaku/status r)) (str "for " (pr-str j)))
+        (is (false? (k/conformant? {:jurisdiction j :postings full :declared? true})))
+        (testing "and the provision is not stamped where it cannot reach —
+                  citing a Japanese ordinance on a verdict about a book kept
+                  elsewhere is the same mistake in a different key"
+          (is (nil? (:kensaku/provision r)))
+          (is (nil? (:kensaku/law-source r))))
+        (testing "the jurisdiction that was asked about is reported back"
+          (is (= j (:kensaku/jurisdiction r))))))))
+
+(deftest the-jurisdiction-is-asked-before-the-election
+  (testing "`which country's rule` precedes `are you claiming it` — otherwise
+            a US book that declares nothing is told :not-declared, which reads
+            as `answer the question and you might qualify`"
+    (let [r (k/conformance {:jurisdiction :us :postings books :declared? nil})]
+      (is (= :unchecked-jurisdiction (:kensaku/status r))))
+    (testing "and declaring you are NOT claiming it does not reach :not-applicable
+              either — nothing established that the rule was ever in play"
+      (is (= :unchecked-jurisdiction
+             (:kensaku/status (k/conformance {:jurisdiction :us :postings books
+                                              :declared? false})))))))
+
+(deftest the-catalogue-not-this-namespace-decides-which-jurisdictions-have-the-rule
+  (testing "a set of keywords kept here would be a second place to update,
+            and it would drift from the library that reads the statute"
+    (is (= :claiming-preferential-treatment (taxlaw/requires-book-search? :jp)))
+    (is (nil? (taxlaw/requires-book-search? :us))
+        "nil, never false — `there is no such rule here` and `nobody has
+         looked` must stay distinct, which is what makes them one test away")
+    (testing "and a jp book still reaches every other status"
+      (is (= :not-declared (:kensaku/status
+                            (k/conformance {:jurisdiction :jp :postings books}))))
+      (is (= :not-applicable (:kensaku/status
+                              (k/conformance {:jurisdiction :jp :postings books
+                                              :declared? false})))))))
+
+(deftest the-route-reads-the-jurisdiction-from-the-client-not-the-request
+  (testing "a caller that could name its own jurisdiction could name the one
+            whose rule it happens to satisfy — the same reason the election
+            is read from the client record"
+    (let [st (store/mem-store)]
+      (store/register-client! st {:client-id "c-1" :name "Acme Inc"
+                                  :jurisdiction :us :yuryo-chobo-declared? true})
+      (store/register-source-doc! st {:doc-id "d1" :client-id "c-1" :kind :receipt})
+      (doseq [p books] (store/commit-posting! st "c-1" p))
+      (let [r (e/search-core st allow did-a {"amount-from" "1"})]
+        (is (= 200 (:status r)) "the search itself is jurisdiction-neutral and works")
+        (is (pos? (get-in r [:body :match-count])))
+        (is (= :unchecked-jurisdiction
+               (get-in r [:body :conformance :kensaku/status]))
+            "but the 優良帳簿 verdict does not follow it")))))
+
+(deftest a-jurisdiction-stored-as-a-path-is-the-same-jurisdiction
+  (testing "`kotoba.taxlaw` normalizes `:jp` and `[:jp]` because actors store
+            a jurisdiction however their own schema does — worklaw and taxlaw
+            both key by PATH, and this repo's client records use the bare
+            keyword. Asking the catalog rather than keeping a map of keywords
+            here is what makes both forms work; a local lookup table would
+            answer `unchecked` for the path form and nobody would see why"
+    (let [full (mapv #(assoc % :bookkeeping/transaction-date "2026-03-01"
+                               :bookkeeping/counterparty "Acme")
+                     books)]
+      (doseq [j [:jp [:jp]]]
+        (is (= :conformant (:kensaku/status
+                            (k/conformance {:jurisdiction j :postings full
+                                            :declared? true})))
+            (str "for " (pr-str j)))))))

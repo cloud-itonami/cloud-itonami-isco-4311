@@ -376,4 +376,38 @@
   :invariant "an operator reading :non-conformant needs the sentence that says what to do"
   :file "src/bookkeeping/kensaku.cljc"
   :find "(str (count missing) \" 件の仕訳が記録項目を欠いており、検索の条件に設定できない。\")"
-  :replace "\"\""}]
+  :replace "\"\""}
+
+ ;; --- which country's rule (added 2026-08-18 after a measured defect: a
+ ;; book with :jurisdiction nil reported :conformant against a Japanese
+ ;; ministerial ordinance) ---
+
+ {:id :the-jurisdiction-is-checked-at-all
+  :invariant "an uncatalogued jurisdiction is not conformant with a JP ordinance"
+  :file "src/bookkeeping/kensaku.cljc"
+  :find "                 (nil? rule-applies) :unchecked-jurisdiction"
+  :replace "                 (nil? nil) :unchecked-jurisdiction"}
+
+ {:id :the-jurisdiction-is-checked-first
+  :invariant "`which country's rule` precedes `are you claiming it`"
+  :file "src/bookkeeping/kensaku.cljc"
+  :find "                 (nil? rule-applies) :unchecked-jurisdiction\n                 (false? declared?) :not-applicable"
+  :replace "                 (false? declared?) :not-applicable\n                 (nil? rule-applies) :unchecked-jurisdiction"}
+
+ {:id :the-provision-is-not-stamped-where-it-cannot-reach
+  :invariant "citing a JP ordinance on a foreign book is the same mistake in another key"
+  :file "src/bookkeeping/kensaku.cljc"
+  :find "     :kensaku/provision (when (some? rule-applies) provision)"
+  :replace "     :kensaku/provision provision"}
+
+ {:id :the-catalogue-decides-which-jurisdictions-have-the-rule
+  :invariant "read from taxlaw, not from a set of keywords kept here"
+  :file "src/bookkeeping/kensaku.cljc"
+  :find "        rule-applies (taxlaw/requires-book-search? jurisdiction)"
+  :replace "        rule-applies (get {:jp :claiming-preferential-treatment} jurisdiction)"}
+
+ {:id :the-route-reads-the-jurisdiction-from-the-client
+  :invariant "a caller cannot name the jurisdiction whose rule it satisfies"
+  :file "src/bookkeeping/edge/endpoints.cljc"
+  :find "                                     :jurisdiction (:jurisdiction c)"
+  :replace "                                     :jurisdiction :jp"}]

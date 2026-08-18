@@ -475,11 +475,12 @@ nothing" when the caller asked something and was not heard.
 
 ### What the deployment may claim, including "cannot tell"
 
-`bookkeeping.kensaku/conformance` answers in **five** values and only one is a
+`bookkeeping.kensaku/conformance` answers in **six** values and only one is a
 pass:
 
 | status | meaning |
 |---|---|
+| `:unchecked-jurisdiction` | the client's jurisdiction is not one `kotoba.taxlaw` has catalogued, or none was declared. **Not a pass**, and checked first. |
 | `:not-declared` | nobody said whether this 保存義務者 claims 法第八条第四項. **Not a pass** — the software cannot observe a tax election. |
 | `:not-applicable` | declared as NOT claiming it. ハ does not bite. Also not a pass: the requirement was found not to apply, nothing was found compliant. |
 | `:no-entries` | claiming it, book empty. An empty ledger has not been shown searchable, only empty. |
@@ -487,12 +488,39 @@ pass:
 | `:conformant` | claiming it, all three probes pass, every entry carries all three. |
 
 `conformant?` is the convenient boolean and returns **false** for the first
-four, the same conservatism `kotoba.taxlaw/supported?` applies to an
+five, the same conservatism `kotoba.taxlaw/supported?` applies to an
 uncatalogued jurisdiction.
 
-The declaration lives on the **client record** (`:yuryo-chobo-declared?`),
-set by the operator — never read from the request. A caller that could
-declare its own 優良帳簿 election could declare compliance into existence.
+Both the declaration (`:yuryo-chobo-declared?`) and the jurisdiction live on
+the **client record**, set by the operator — never read from the request. A
+caller that could declare its own 優良帳簿 election could declare compliance
+into existence, and a caller that could name its own jurisdiction could name
+the one whose rule it happens to satisfy.
+
+#### The jurisdiction check was missing, and was measured missing
+
+The first version of this asked whether the operator was claiming 優良帳簿 and
+never asked **which country's** 優良帳簿. Measured 2026-08-18 on a USD book
+with no jurisdiction at all:
+
+```clojure
+:conformance #:kensaku{:status :conformant
+                       :provision 電子帳簿保存法施行規則 第五条第五項第一号ハ}
+```
+
+That is this repo's own recurring defect one level up — a check that could not
+apply returning what a check that applied and passed returns. `:declared?` was
+guarded; `:jurisdiction` was not. Eighteen existing tests were asserting
+conformance verdicts for a book with no jurisdiction, which is how the fix
+announced itself.
+
+Whether a jurisdiction has this rule is asked of `kotoba.taxlaw`
+(`requires-book-search?`), not of a set of keywords kept here — a local table
+would be a second place to update, and it would already be wrong: taxlaw
+normalizes `:jp` and `[:jp]`, and a keyword map silently answers *unchecked*
+for the path form that `worklaw` and `taxlaw` both use. The provision is
+stamped only where it reaches, because citing a Japanese ministerial ordinance
+on a verdict about a book kept elsewhere is the same mistake in another key.
 
 And the verdict **runs the search** rather than asserting it exists: eight
 probes over two synthetic postings check （１）（２）（３） individually. A

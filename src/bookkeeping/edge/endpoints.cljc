@@ -567,11 +567,17 @@
                     ;; that keeps a caller from naming its own client. A
                     ;; caller that could declare its own 優良帳簿 election
                     ;; could declare compliance into existence.
-                    :conformance (kensaku/conformance
-                                  {:postings postings
-                                   :declared? (:yuryo-chobo-declared?
-                                               (store/client store client-id))
-                                   :search-fn kensaku/search})}}))))))
+                    :conformance (let [c (store/client store client-id)]
+                                   (kensaku/conformance
+                                    {:postings postings
+                                     ;; the jurisdiction is the CLIENT's, for
+                                     ;; the same reason the election is: a
+                                     ;; caller that could name its own
+                                     ;; jurisdiction could name the one whose
+                                     ;; rule it happens to satisfy.
+                                     :jurisdiction (:jurisdiction c)
+                                     :declared? (:yuryo-chobo-declared? c)
+                                     :search-fn kensaku/search}))}}))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Cloudflare entry points
