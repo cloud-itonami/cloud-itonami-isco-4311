@@ -612,4 +612,27 @@
   :invariant "a balance sheet missing an account still balances; it is not an attachment"
   :file "src/bookkeeping/houjinzei.cljc"
   :find "                 (not (:houjinzei/whole? att)) :attachments-not-whole"
-  :replace "                 false :attachments-not-whole"}]
+  :replace "                 false :attachments-not-whole"}
+
+ ;; --- 電子取引の保存 / 真実性 (2026-08-19). Each of the three aims at a
+ ;; refusal, because the refusals are the whole namespace: an undeclared
+ ;; measure, a measure outside the four, and a declaration with nothing
+ ;; behind it must each stay distinct from conformance.
+
+ {:id :nobody-declared-is-not-nobody-needed
+  :invariant "a client that declared no 第四条第一項 measure is not conformant"
+  :file "src/bookkeeping/hozon.cljc"
+  :find "                 (nil? measure) :measure-not-declared"
+  :replace "                 false :measure-not-declared"}
+
+ {:id :an-unrecognised-measure-is-not-one-of-the-four
+  :invariant "第四条第一項 lists four; anything else is refused, not accepted"
+  :file "src/bookkeeping/hozon.cljc"
+  :find "                 (not (true? (recognised? path measure))) :measure-not-recognised"
+  :replace "                 false :measure-not-recognised"}
+
+ {:id :a-declaration-is-not-the-measure
+  :invariant "a measure with no evidence behind it satisfies a keyword, not the article"
+  :file "src/bookkeeping/hozon.cljc"
+  :find "                 (seq ev-problems) :measure-unevidenced"
+  :replace "                 false :measure-unevidenced"}]
