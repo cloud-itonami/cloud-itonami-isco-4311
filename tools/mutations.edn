@@ -450,11 +450,11 @@
   :find "      (and (= :checked (:taxlaw/coverage preservation))\n           (false? (:taxlaw/preserved? preservation)))"
   :replace "      (and (not= :nope (:taxlaw/coverage preservation))\n           (not (true? (:taxlaw/preserved? preservation))))"}
 
- {:id :the-taxlaw-pin-is-the-one-with-two-more-jurisdictions
-  :invariant "the whole point of the bump — an older pin has neither"
+ {:id :the-taxlaw-pin-is-the-one-with-the-filing-facets
+  :invariant "the whole point of the bump — an older pin has no filing-obligation"
   :file "deps.edn"
-  :find "\"d2663b54aad645244e61ae548054943b1229c1fc\""
-  :replace "\"ad431b4f8a07474e2c0b8f4bf2efba3fca3e03f1\""}
+  :find "\"fd14aa638ca4b77f29c7420069a60e1e841df359\""
+  :replace "\"d2663b54aad645244e61ae548054943b1229c1fc\""}
  {:id :shinkoku-undated-is-never-outside
   :invariant "an entry with no 取引年月日 is :unplaceable, never :out — :out files the return without it and reports nothing"
   :file "src/bookkeeping/shinkoku.cljc"
@@ -589,4 +589,27 @@
   :invariant "kotoba.taxlaw accepts :jp and [:jp]; comparing the raw value against read-for silently answers `not read` for a client record that stores the keyword"
   :file "src/bookkeeping/shinkoku.cljc"
   :find "                 (not (contains? read-for (if (vector? jurisdiction)\n                                            jurisdiction\n                                            (when (some? jurisdiction) [jurisdiction]))))"
-  :replace "                 (not (contains? read-for jurisdiction))"}]
+  :replace "                 (not (contains? read-for jurisdiction))"}
+
+ ;; --- 法人税申告 (2026-08-19). The namespace exists to refuse six figures
+ ;; and to answer one question it can (第七十四条第三項's attachments), so the
+ ;; mutations aim at exactly those two claims and at the date arithmetic,
+ ;; which is the only computation in the file.
+
+ {:id :the-civil-code-proviso-is-reachable
+  :invariant "民法 第百四十三条第二項但書 — no corresponding day means the month's last day"
+  :file "src/bookkeeping/houjinzei.cljc"
+  :find "corresponding? (<= d (days-in-month y2 m2))"
+  :replace "corresponding? true"}
+
+ {:id :a-ledger-supplies-none-of-the-six
+  :invariant "第七十四条第一項 一〜六 are all unsupplied; claiming one is a silent wrong return"
+  :file "src/bookkeeping/houjinzei.cljc"
+  :find ":name \"当該事業年度の課税標準である所得の金額又は欠損金額\"\n    :supplied? false"
+  :replace ":name \"当該事業年度の課税標準である所得の金額又は欠損金額\"\n    :supplied? true"}
+
+ {:id :statements-that-are-short-are-not-attachments
+  :invariant "a balance sheet missing an account still balances; it is not an attachment"
+  :file "src/bookkeeping/houjinzei.cljc"
+  :find "                 (not (:houjinzei/whole? att)) :attachments-not-whole"
+  :replace "                 false :attachments-not-whole"}]
