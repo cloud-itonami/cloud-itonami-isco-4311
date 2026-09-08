@@ -64,7 +64,7 @@
   absent, never as a counterparty named \"   \". The edge refuses one outright
   (400) so a caller learns; this is the floor under callers that are not the
   edge."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [kotoba.banking :as banking]))
 
 ;; ---------------------------------------------------------------------------

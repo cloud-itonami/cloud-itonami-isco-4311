@@ -63,7 +63,7 @@
   `not declared` and `not applicable`, and NEITHER of them is a pass — the
   same discipline `kotoba-lang/taxlaw` uses for an uncatalogued jurisdiction
   and `kotoba-lang/worklaw` for an unexamined one."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [bookkeeping.posting :as posting]
             [kotoba.taxlaw :as taxlaw]))
 

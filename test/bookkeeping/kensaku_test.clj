@@ -7,7 +7,7 @@
   A search that ran over `:source-doc` and `:lines` alone would have passed
   its own tests and satisfied none of the provision."
   (:require [clojure.test :refer [deftest is testing]]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [bookkeeping.posting :as posting]
             [bookkeeping.motochou :as mc]
             [bookkeeping.kensaku :as k]

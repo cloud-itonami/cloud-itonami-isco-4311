@@ -24,7 +24,7 @@
      :rationale str}
   LLM parse failures always yield `:confidence 0.0` (never fabricate
   confidence), which forces the governor to escalate/hold."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             #?(:clj  [clojure.edn :as edn]
                :cljs [cljs.reader :as edn])))
 

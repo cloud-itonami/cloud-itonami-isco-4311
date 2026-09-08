@@ -1,6 +1,6 @@
 (ns bookkeeping.houjinzei-test
   (:require [clojure.test :refer [deftest is testing]]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [bookkeeping.houjinzei :as hz]
             [bookkeeping.actor :as actor]
             [bookkeeping.store :as store]))

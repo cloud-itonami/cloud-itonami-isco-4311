@@ -4,7 +4,7 @@
 
   Most of this file is about what the namespace will NOT say."
   (:require [clojure.test :refer [deftest is testing]]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [bookkeeping.posting :as posting]
             [bookkeeping.shohizei :as sz]))
 
