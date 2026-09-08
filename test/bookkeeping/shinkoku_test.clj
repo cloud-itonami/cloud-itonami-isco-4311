@@ -5,7 +5,7 @@
   about the one hazard the namespace exists for: input tax credited on an
   entry nobody checked against 消費税法 第三十条第七項."
   (:require [clojure.test :refer [deftest is testing]]
-            [clojure.string :as str]
+            [kotoba.lang.text :as str]
             [bookkeeping.actor :as actor]
             [bookkeeping.posting :as posting]
             [bookkeeping.shinkoku :as sk]

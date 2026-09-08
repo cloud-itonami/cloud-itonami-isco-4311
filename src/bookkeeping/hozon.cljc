@@ -45,7 +45,7 @@
   pass the one it satisfies."
   (:require [kotoba.taxlaw :as taxlaw]
             [bookkeeping.store :as store]
-            [clojure.string :as str]))
+            [kotoba.lang.text :as str]))
 
 (def read-for
   "The jurisdictions whose 電子取引 preservation article this file read.

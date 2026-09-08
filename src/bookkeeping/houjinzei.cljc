@@ -45,7 +45,7 @@
             [bookkeeping.store :as store]
             [bookkeeping.posting :as posting]
             [kotoba.taxlaw :as taxlaw]
-            [clojure.string :as str]))
+            [kotoba.lang.text :as str]))
 
 (def provisions
   "The articles this file decides on, quoted verbatim with the retrieval and

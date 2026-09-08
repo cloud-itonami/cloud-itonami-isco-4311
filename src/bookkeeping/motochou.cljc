@@ -28,7 +28,7 @@
   period are not the same answer. `:unknown-account` and an empty `:lines`
   with `:entry-count 0` say which — a caller shown a blank page otherwise
   cannot tell a typo from a quiet month."
-  (:require [clojure.string :as str]))
+  (:require [kotoba.lang.text :as str]))
 
 (defn- posting-lines
   "Flatten postings into ledger lines, keeping commit order and remembering

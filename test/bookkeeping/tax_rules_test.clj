@@ -9,7 +9,7 @@
   When `jurisdictions.cljc` moved out, deleting its test file wholesale took
   these with it and the suite fell from 30 tests to 18 — a silent loss of
   actor coverage dressed up as a clean extraction. They are restored here."
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is testing]]
             [bookkeeping.store :as store]
             [bookkeeping.governor :as governor]))
