@@ -334,7 +334,7 @@ ignore the caller's client on read (1).
 over `langchain.db`, via `kotoba-lang/langchain-store` — the codec is not
 hand-rolled here).
 
-`test/bookkeeping/store_contract_test.clj` runs **every assertion against
+`test/bookkeeping/store_contract_test.kotoba` runs **every assertion against
 both**, because `actor-test`, `governor-test`, `tax-rules-test`,
 `ledger-test` and the edge tests all construct `mem-store` and only
 `mem-store`. A `DatomicStore` that answered differently would not redden one
@@ -386,7 +386,7 @@ An actor that only accepts is a write-only hole.
 
 ### Three ways a surface undoes the actor behind it
 
-Every test in `test/bookkeeping/edge/endpoints_test.clj` is one of these.
+Every test in `test/bookkeeping/edge/endpoints_test.kotoba` is one of these.
 
 **It opens when nothing is configured.** An absent allow-list serves `503`,
 never an open endpoint — "nobody is allowed" and "nothing was configured"
@@ -530,7 +530,7 @@ containing a `defn`; *it returned exactly probe-b for a 5000–20000 range* is
 a measurement.
 
 Measured 2026-08-18: **53 mutations, 53 killed, 0 survived**
-(`nbb tools/check-mutations.cljs && nbb tools/mutate.cljs`). The table in
+(`nbb tools/check-mutations.kotoba && nbb tools/mutate.kotoba`). The table in
 `tools/mutations.edn` covers **only** the 記録項目 and the search — not the
 governor, the store, the statements or the batch route, which have suites and
 no mutations. Three of the 53 were added last precisely because they looked
