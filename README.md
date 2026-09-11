@@ -530,7 +530,7 @@ containing a `defn`; *it returned exactly probe-b for a 5000–20000 range* is
 a measurement.
 
 Measured 2026-08-18: **53 mutations, 53 killed, 0 survived**
-(`nbb tools/check-mutations.cljk && nbb tools/mutate.cljk`). The table in
+(`kbb --backend sci tools/check-mutations.cljk && kbb --backend sci tools/mutate.cljk`). The table in
 `tools/mutations.edn` covers **only** the 記録項目 and the search — not the
 governor, the store, the statements or the batch route, which have suites and
 no mutations. Three of the 53 were added last precisely because they looked

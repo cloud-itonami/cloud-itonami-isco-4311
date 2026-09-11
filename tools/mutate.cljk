@@ -2,15 +2,15 @@
   "Prove the suite can fail.
 
   A test that has never gone red is a test nobody has measured. This applies
-  one single-token mutation to one source file, runs `clojure -M:test`, and
+  one single-token mutation to one source file, runs `kbb -M:test`, and
   records which tests reddened — then restores the file. A mutation that
   reddens NOTHING is reported as a SURVIVOR, which is a finding about the
   suite, not about the mutation.
 
   Usage (from the repo root):
 
-      nbb tools/mutate.cljk             # every mutation in the table
-      nbb tools/mutate.cljk :duplicate  # one, by id
+      kbb --backend sci tools/mutate.cljk             # every mutation in the table
+      kbb --backend sci tools/mutate.cljk :duplicate  # one, by id
 
   The table lives in `tools/mutations.edn`. Each entry names the invariant,
   the file, an EXACT substring to find (it must occur exactly once — a
@@ -24,7 +24,7 @@
 
 (defn- run-tests []
   (try
-    (let [out (.toString (cp/execSync "clojure -M:test 2>&1"))]
+    (let [out (.toString (cp/execSync "kbb -M:test 2>&1"))]
       {:exit 0 :out out})
     (catch :default e
       {:exit (or (.-status e) 1)
