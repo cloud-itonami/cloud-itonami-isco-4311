@@ -1,5 +1,5 @@
 ;; One mutation per invariant. `:find` must occur EXACTLY ONCE in `:file` —
-;; `tools/mutate.cljs` refuses otherwise, because a mutation that landed in a
+;; `tools/mutate.cljk` refuses otherwise, because a mutation that landed in a
 ;; comment or in a second call site produces a red suite that proves nothing.
 ;;
 ;; Read the pair before trusting a red: the thing broken and the thing
@@ -25,19 +25,19 @@
  ;; -------------------------------------------------------------------------
  {:id :date-shape-is-iso-8601
   :invariant "YYYY-MM-DD only — a 2026/01/15 would sort as text and compare wrongly in a ハ（２） range"
-  :file "src/bookkeeping/posting.cljc"
+  :file "src/bookkeeping/posting.cljk"
   :find "(re-matches #\"(\\d{4})-(\\d{2})-(\\d{2})\" s)"
   :replace "(re-matches #\"(\\d{4}).(\\d{2}).(\\d{2})\" s)"}
 
  {:id :date-day-bound-follows-the-month
   :invariant "2026-02-30 and 2026-04-31 are refused — a date that cannot exist answers nothing forever"
-  :file "src/bookkeeping/posting.cljc"
+  :file "src/bookkeeping/posting.cljk"
   :find "(nth month-days (dec mo))"
   :replace "31"}
 
  {:id :leap-year-skips-the-century
   :invariant "1900 is not a leap year and 2000 is — the /400 rule is not decoration"
-  :file "src/bookkeeping/posting.cljc"
+  :file "src/bookkeeping/posting.cljk"
   :find "(zero? (mod y 400))"
   :replace "(zero? (mod y 4))"}
 
@@ -46,13 +46,13 @@
  ;; -------------------------------------------------------------------------
  {:id :blank-counterparty-is-absent
   :invariant "a 取引先 of \"\" matches an equality search, so it must not be recorded as one"
-  :file "src/bookkeeping/posting.cljc"
+  :file "src/bookkeeping/posting.cljk"
   :find "(not (str/blank? s))"
   :replace "(not (nil? s))"}
 
  {:id :project-records-the-counterparty
   :invariant "the field reaches the posting rather than being accepted and dropped"
-  :file "src/bookkeeping/posting.cljc"
+  :file "src/bookkeeping/posting.cljk"
   :find ":bookkeeping/counterparty (normalize-counterparty counterparty)"
   :replace ":bookkeeping/counterparty nil"}
 
@@ -61,13 +61,13 @@
  ;; -------------------------------------------------------------------------
  {:id :the-date-is-part-of-the-id
   :invariant "same receipt, same lines, different day = a different entry, not a duplicate"
-  :file "src/bookkeeping/posting.cljc"
+  :file "src/bookkeeping/posting.cljk"
   :find "transaction-date \"\\u0000\""
   :replace "nil \"\\u0000\""}
 
  {:id :the-counterparty-is-part-of-the-id
   :invariant "same receipt, same lines, different supplier = a different entry"
-  :file "src/bookkeeping/posting.cljc"
+  :file "src/bookkeeping/posting.cljk"
   :find "(normalize-counterparty counterparty) \"\\u0000\""
   :replace "nil \"\\u0000\""}
 
@@ -76,37 +76,37 @@
  ;; -------------------------------------------------------------------------
  {:id :the-advisor-passes-the-counterparty-through
   :invariant "the advisor extracts rather than drops — a proposal without it commits without it"
-  :file "src/bookkeeping/advisor.cljc"
+  :file "src/bookkeeping/advisor.cljk"
   :find "   :counterparty counterparty"
   :replace "   :counterparty nil"}
 
  {:id :the-actor-puts-the-date-in-the-id
   :invariant "the commit node hashes the date, so two entries a day apart do not collide"
-  :file "src/bookkeeping/actor.cljc"
+  :file "src/bookkeeping/actor.cljk"
   :find "(:lines proposal)\n                                    :transaction-date (:transaction-date proposal)"
   :replace "(:lines proposal)\n                                    :transaction-date nil"}
 
  {:id :the-actor-stores-the-date
   :invariant "the commit node passes it to `project`, not only to the id"
-  :file "src/bookkeeping/actor.cljc"
+  :file "src/bookkeeping/actor.cljk"
   :find ":memo (:memo proposal)\n                                   :transaction-date (:transaction-date proposal)"
   :replace ":memo (:memo proposal)\n                                   :transaction-date nil"}
 
  {:id :the-edge-forwards-the-date
   :invariant "a body that carried 取引年月日 reaches the actor carrying it"
-  :file "src/bookkeeping/edge/endpoints.cljc"
+  :file "src/bookkeeping/edge/endpoints.cljk"
   :find ":transaction-date (:transaction-date body)"
   :replace ":transaction-date nil"}
 
  {:id :the-journal-shows-the-record-items
   :invariant "仕訳帳 says WHEN and WITH WHOM, or it is the working with the working left out"
-  :file "src/bookkeeping/motochou.cljc"
+  :file "src/bookkeeping/motochou.cljk"
   :find "            :transaction-date transaction-date"
   :replace "            :transaction-date nil"}
 
  {:id :the-ledger-view-shows-the-record-items
   :invariant "総勘定元帳 lines carry them too"
-  :file "src/bookkeeping/motochou.cljc"
+  :file "src/bookkeeping/motochou.cljk"
   :find "     :transaction-date transaction-date\n     :counterparty counterparty\n     :account"
   :replace "     :transaction-date nil\n     :counterparty counterparty\n     :account"}
 
@@ -115,13 +115,13 @@
  ;; -------------------------------------------------------------------------
  {:id :a-malformed-date-is-refused-at-the-door
   :invariant "2026-02-30 is a 400, not something to store and let a range query miss forever"
-  :file "src/bookkeeping/edge/endpoints.cljc"
+  :file "src/bookkeeping/edge/endpoints.cljk"
   :find "(posting/valid-transaction-date? (:transaction-date m))"
   :replace "(some? (:transaction-date m))"}
 
  {:id :a-blank-counterparty-is-refused-at-the-door
   :invariant "the caller learns its field was empty instead of believing it recorded a 取引先"
-  :file "src/bookkeeping/edge/endpoints.cljc"
+  :file "src/bookkeeping/edge/endpoints.cljk"
   :find "(some? (posting/normalize-counterparty (:counterparty m)))"
   :replace "(some? (:counterparty m))"}
 
@@ -130,13 +130,13 @@
  ;; -------------------------------------------------------------------------
  {:id :the-amount-is-one-side-only
   :invariant "summing both sides doubles every balanced entry's 取引金額"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(if (= :debit side)"
   :replace "(if (or true (= :debit side))"}
 
  {:id :the-amount-is-the-debit-side
   :invariant "the credit side answers the same for balanced entries and differently for the rest"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(update acc currency (fnil + 0) amount)"
   :replace "(update acc \"ALL\" (fnil + 0) amount)"}
 
@@ -145,37 +145,37 @@
  ;; -------------------------------------------------------------------------
  {:id :a-missing-record-item-does-not-match
   :invariant "an entry with no 取引先 must not fall through as a match and hide the gap"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "    (nil? v) false"
   :replace "    (nil? v) true"}
 
  {:id :ranges-are-inclusive
   :invariant "ハ（２）: the boundary dates and amounts are inside the range"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(or (nil? from) (not (neg? (compare v from))))"
   :replace "(or (nil? from) (pos? (compare v from)))"}
 
  {:id :combining-conditions-narrows
   :invariant "ハ（３） is AND — an OR passes every single-condition test and is still wrong"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(when (and (or (not (contains? conditions :transaction-date))"
   :replace "(when (or (or (not (contains? conditions :transaction-date))"}
 
  {:id :a-range-on-counterparty-is-refused
   :invariant "ハ（２） grants ranges on 日付 and 金額 only; silently reading one as equality answers a question nobody asked"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(and (range-condition? c) (not (rangeable item)))"
   :replace "(and (range-condition? c) false)"}
 
  {:id :no-conditions-is-not-everything
   :invariant "a conditionless search must not become a silent full-table read"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "      (empty? conditions)"
   :replace "      (empty? [:never])"}
 
  {:id :searched-count-is-reported
   :invariant "zero matches out of zero examined and zero out of three are different answers"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find ":kensaku/searched-count (count postings)"
   :replace ":kensaku/searched-count 0"}
 
@@ -184,13 +184,13 @@
  ;; -------------------------------------------------------------------------
  {:id :an-unknown-parameter-is-not-silence
   :invariant "?conterparty=x must not become `you asked nothing` — the caller asked and was not heard"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "             (update acc :problems conj\n                     (problem nil :unknown-parameter"
   :replace "             (update acc :problems (fn [p _] p)\n                     (problem nil :unknown-parameter"}
 
  {:id :an-exact-and-a-range-condition-conflict
   :invariant "two different questions; answering one silently gives a result set the caller cannot account for"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "already (get conditions item ::absent)"
   :replace "already ::absent"}
 
@@ -199,37 +199,37 @@
  ;; -------------------------------------------------------------------------
  {:id :the-probe-actually-runs-the-search
   :invariant "conformance MEASURES the search; a hardcoded pass is the whole failure mode this exists for"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find ":pass? (= expect got)"
   :replace ":pass? true"}
 
  {:id :a-broken-search-is-non-conformant
   :invariant "ハ is about the FUNCTION as well as the data — fully recorded books with no working search do not qualify"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(not searchable?) :non-conformant"
   :replace "(not true) :non-conformant"}
 
  {:id :an-undeclared-election-is-not-a-pass
   :invariant "only a literal true declares; a truthy \"no\" must not mean yes"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(not (true? declared?)) :not-declared"
   :replace "(not declared?) :not-declared"}
 
  {:id :not-applicable-is-not-a-pass
   :invariant "the requirement was found not to apply; nothing was found compliant"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(false? declared?) :not-applicable"
   :replace "(false? declared?) :conformant"}
 
  {:id :an-empty-book-is-not-conformant
   :invariant "an empty ledger has not been shown searchable, only empty"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(zero? (count postings)) :no-entries"
   :replace "(zero? (count postings)) :conformant"}
 
  {:id :missing-record-items-are-counted
   :invariant "the count and the posting ids, because `some entries` is not actionable"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(nil? (:counterparty r)) (conj :counterparty)"
   :replace "(some? (:counterparty r)) (conj :counterparty)"}
 
@@ -238,25 +238,25 @@
  ;; -------------------------------------------------------------------------
  {:id :the-route-uses-the-callers-query
   :invariant "the query reaches the search rather than being accepted and ignored"
-  :file "src/bookkeeping/edge/endpoints.cljc"
+  :file "src/bookkeeping/edge/endpoints.cljk"
   :find "parsed (kensaku/parse-query query)"
   :replace "parsed (kensaku/parse-query {})"}
 
  {:id :the-search-is-scoped-to-the-caller
   :invariant "one caller must not search another's book — the store scopes, the surface must not undo it"
-  :file "src/bookkeeping/edge/endpoints.cljc"
+  :file "src/bookkeeping/edge/endpoints.cljk"
   :find "postings (store/postings-of store client-id)\n          parsed"
   :replace "postings (store/postings-of store \"c-1\")\n          parsed"}
 
  {:id :a-conditionless-search-is-400
   :invariant "not a 200 over the whole book — `I filtered nothing` and `nothing matched` must differ"
-  :file "src/bookkeeping/edge/endpoints.cljc"
+  :file "src/bookkeeping/edge/endpoints.cljk"
   :find "{:status 400 :body {:ok false :error \"no 記録項目 set\""
   :replace "{:status 200 :body {:ok false :error \"no 記録項目 set\""}
 
  {:id :the-declaration-comes-from-the-store
   :invariant "a caller that could declare its own 優良帳簿 election could declare compliance into existence"
-  :file "src/bookkeeping/edge/endpoints.cljc"
+  :file "src/bookkeeping/edge/endpoints.cljk"
   :find ":declared? (:yuryo-chobo-declared?"
   :replace ":declared? true #_(:yuryo-chobo-declared?"}
 
@@ -267,91 +267,91 @@
  ;; -------------------------------------------------------------------------
  {:id :the-edge-forwards-the-counterparty
   :invariant "a body that carried 取引先 reaches the actor carrying it"
-  :file "src/bookkeeping/edge/endpoints.cljc"
+  :file "src/bookkeeping/edge/endpoints.cljk"
   :find ":counterparty (:counterparty body)"
   :replace ":counterparty nil"}
 
  {:id :the-actor-stores-the-counterparty
   :invariant "the commit node passes it to `project`"
-  :file "src/bookkeeping/actor.cljc"
+  :file "src/bookkeeping/actor.cljk"
   :find ":counterparty (:counterparty proposal)))]"
   :replace ":counterparty nil))]"}
 
  {:id :the-actor-puts-the-counterparty-in-the-id
   :invariant "same receipt, same day, different supplier does not collide"
-  :file "src/bookkeeping/actor.cljc"
+  :file "src/bookkeeping/actor.cljk"
   :find ":counterparty (:counterparty proposal))\n                                   (:lines proposal)"
   :replace ":counterparty nil)\n                                   (:lines proposal)"}
 
  {:id :the-journal-shows-the-counterparty
   :invariant "仕訳帳 says with whom"
-  :file "src/bookkeeping/motochou.cljc"
+  :file "src/bookkeeping/motochou.cljk"
   :find "            :counterparty counterparty"
   :replace "            :counterparty nil"}
 
  {:id :the-advisor-passes-the-date-through
   :invariant "the advisor extracts the date rather than dropping it"
-  :file "src/bookkeeping/advisor.cljc"
+  :file "src/bookkeeping/advisor.cljk"
   :find "   :transaction-date transaction-date"
   :replace "   :transaction-date nil"}
 
  {:id :the-matched-currency-is-reported
   :invariant "a caller must see WHICH currency satisfied the amount condition"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(assoc :matched-currencies currencies)"
   :replace "(assoc :matched-currencies [])"}
 
  {:id :an-unknown-condition-is-refused
   :invariant "ハ（１） names three 記録項目; a fourth is a refusal, not a filter to skip"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(not (some #{item} record-item-keys))"
   :replace "false"}
 
  {:id :a-reversed-range-is-refused
   :invariant "an impossible query and nothing matched are different findings"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(pos? (compare (:from c) (:to c))))"
   :replace "false)"}
 
  {:id :an-empty-range-is-refused
   :invariant "{} sets no bound and is not a condition"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(not (or (contains? c :from) (contains? c :to)))"
   :replace "false"}
 
  {:id :a-stray-range-key-is-refused
   :invariant "a range takes :from and :to only; a :step is a caller that thinks it asked something"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(seq extra)\n      [(problem item :unknown-range-key"
   :replace "false\n      [(problem item :unknown-range-key"}
 
  {:id :a-range-bound-must-be-a-value
   :invariant "{:from \"yesterday\"} would compare as text and quietly answer wrongly"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(seq (remove (fn [[_ v]] (valid? v)) c))"
   :replace "false"}
 
  {:id :the-amount-parameter-must-be-an-integer
   :invariant "?amount=5,000 must not become 5"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(re-matches #\"-?\\d+\" s)"
   :replace "(re-matches #\".*\" s)"}
 
  {:id :the-entry-count-is-real
   :invariant "conformance reports how many entries it looked at, an evidence floor"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find ":kensaku/entry-count (count postings)"
   :replace ":kensaku/entry-count 0"}
 
  {:id :validation-runs-before-the-search
   :invariant "an invalid condition is refused, not silently searched around"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "      (seq problems)"
   :replace "      (seq nil)"}
 
  {:id :the-provision-is-cited
   :invariant "the answer names the provision it answers, with a retrievable source"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "  \"電子帳簿保存法施行規則 第五条第五項第一号ハ\")"
   :replace "  \"\")"}
 
@@ -362,19 +362,19 @@
  ;; -------------------------------------------------------------------------
  {:id :the-applied-conditions-are-echoed
   :invariant "the response says what it filtered on — with a repeated ?date=, that echo is the only way a caller learns which one was used"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find ":kensaku/conditions conditions"
   :replace ":kensaku/conditions {}"}
 
  {:id :a-result-row-carries-the-entry
   :invariant "a search hit that does not show the entry's lines is a row of ids"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find ":lines (mapv (fn [e] {:account (:ledger/account e)"
   :replace ":lines (mapv (fn [e] {:account nil"}
 
  {:id :conformance-says-why-in-words
   :invariant "an operator reading :non-conformant needs the sentence that says what to do"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "(str (count missing) \" 件の仕訳が記録項目を欠いており、検索の条件に設定できない。\")"
   :replace "\"\""}
 
@@ -384,31 +384,31 @@
 
  {:id :the-jurisdiction-is-checked-at-all
   :invariant "an uncatalogued jurisdiction is not conformant with a JP ordinance"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "                 (nil? rule-applies) :unchecked-jurisdiction"
   :replace "                 (nil? nil) :unchecked-jurisdiction"}
 
  {:id :the-jurisdiction-is-checked-first
   :invariant "`which country's rule` precedes `are you claiming it`"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "                 (nil? rule-applies) :unchecked-jurisdiction\n                 (false? declared?) :not-applicable"
   :replace "                 (false? declared?) :not-applicable\n                 (nil? rule-applies) :unchecked-jurisdiction"}
 
  {:id :the-provision-is-not-stamped-where-it-cannot-reach
   :invariant "citing a JP ordinance on a foreign book is the same mistake in another key"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "     :kensaku/provision (when (some? rule-applies) provision)"
   :replace "     :kensaku/provision provision"}
 
  {:id :the-catalogue-decides-which-jurisdictions-have-the-rule
   :invariant "read from taxlaw, not from a set of keywords kept here"
-  :file "src/bookkeeping/kensaku.cljc"
+  :file "src/bookkeeping/kensaku.cljk"
   :find "        rule-applies (taxlaw/requires-book-search? jurisdiction)"
   :replace "        rule-applies (get {:jp :claiming-preferential-treatment} jurisdiction)"}
 
  {:id :the-route-reads-the-jurisdiction-from-the-client
   :invariant "a caller cannot name the jurisdiction whose rule it satisfies"
-  :file "src/bookkeeping/edge/endpoints.cljc"
+  :file "src/bookkeeping/edge/endpoints.cljk"
   :find "                                     :jurisdiction (:jurisdiction c)"
   :replace "                                     :jurisdiction :jp"}
 
@@ -416,37 +416,37 @@
 
  {:id :an-uncheckable-jurisdiction-is-still-a-hold
   :invariant "a US claim is held as hard as before the US was catalogued"
-  :file "src/bookkeeping/governor.cljc"
+  :file "src/bookkeeping/governor.cljk"
   :find "      (= :none (:taxlaw/coverage support))\n      (conj {:rule :unchecked-jurisdiction"
   :replace "      (= :nope (:taxlaw/coverage support))\n      (conj {:rule :unchecked-jurisdiction"}
 
  {:id :the-hold-explains-itself-accurately
   :invariant "`the US is not in taxlaw` became false when the US was catalogued"
-  :file "src/bookkeeping/governor.cljc"
+  :file "src/bookkeeping/governor.cljk"
   :find "             :detail (if-let [why (:taxlaw/why support)]"
   :replace "             :detail (if-let [why nil]"}
 
  {:id :the-out-of-scope-facet-is-forwarded
   :invariant "an operator learns WHICH facet was missing, not just that one was"
-  :file "src/bookkeeping/governor.cljc"
+  :file "src/bookkeeping/governor.cljk"
   :find "             :taxlaw/out-of-scope (:taxlaw/out-of-scope support)"
   :replace "             :taxlaw/out-of-scope nil"}
 
  {:id :a-genuinely-absent-jurisdiction-still-says-so
   :invariant "the old sentence survives for a jurisdiction really not catalogued"
-  :file "src/bookkeeping/governor.cljc"
+  :file "src/bookkeeping/governor.cljk"
   :find "                       (str \"仕入税額控除を主張しているが、法域 \"\n                            (pr-str juris)\n                            \" は kotoba.taxlaw に無い（未検査は合格ではない）\"))})"
   :replace "                       (str \"仕入税額控除を主張しているが、法域 \"\n                            (pr-str juris)\n                            \" では検査できない（未検査は合格ではない）\"))})"}
 
  {:id :an-eu-invoice-with-no-number-is-refused
   :invariant "rule 6 fires in the EU as it does in Japan"
-  :file "src/bookkeeping/governor.cljc"
+  :file "src/bookkeeping/governor.cljk"
   :find "      (and (= :checked (:taxlaw/coverage support))\n           (false? (:taxlaw/supported? support)))"
   :replace "      (and (= :checked (:taxlaw/coverage support))\n           (nil? (:taxlaw/supported? support)))"}
 
  {:id :the-preservation-rule-reads-its-own-coverage
   :invariant "an EU electronic invoice on paper is not held on Japan's article"
-  :file "src/bookkeeping/governor.cljc"
+  :file "src/bookkeeping/governor.cljk"
   :find "      (and (= :checked (:taxlaw/coverage preservation))\n           (false? (:taxlaw/preserved? preservation)))"
   :replace "      (and (not= :nope (:taxlaw/coverage preservation))\n           (not (true? (:taxlaw/preserved? preservation))))"}
 
@@ -457,137 +457,137 @@
   :replace "\"d2663b54aad645244e61ae548054943b1229c1fc\""}
  {:id :shinkoku-undated-is-never-outside
   :invariant "an entry with no 取引年月日 is :unplaceable, never :out — :out files the return without it and reports nothing"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "      (not (posting/valid-transaction-date? d)) :unplaceable"
   :replace "      (not (posting/valid-transaction-date? d)) :out"}
 
  {:id :shinkoku-period-includes-its-first-day
   :invariant "課税期間 is inclusive at :from — an off-by-one drops 1 January's entries out of the year"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "      (neg? (compare d (:from period))) :out"
   :replace "      (not (pos? (compare d (:from period)))) :out"}
 
  {:id :shinkoku-period-includes-its-last-day
   :invariant "and inclusive at :to"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "      (pos? (compare d (:to period))) :out"
   :replace "      (not (neg? (compare d (:to period)))) :out"}
 
  {:id :shinkoku-one-undated-entry-taints-every-period
   :invariant "unplaceable is measured over the WHOLE book — there is no period an undated entry can be excluded from"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "        stranded (when (empty? problems) (unplaceable postings))"
   :replace "        stranded (when (empty? problems) (unplaceable []))"}
 
  {:id :shinkoku-a-reversed-period-is-reported
   :invariant "an impossible 課税期間 and a quiet one are different findings"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "             (pos? (compare from to)))"
   :replace "             (neg? (compare from to)))"}
 
  {:id :shinkoku-a-non-map-period-says-so
   :invariant ":no-period names the fault; falling through to :bad-from/:bad-to blames the wrong thing"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "    (not (map? period))"
   :replace "    (nil? period)"}
 
  {:id :shinkoku-the-regime-is-read-strictly
   :invariant "\"general\" is not :general — a loose read lets a string decide a tax election"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "                 (not (contains? regimes regime)) :regime-not-declared"
   :replace "                 (nil? regime) :regime-not-declared"}
 
  {:id :shinkoku-only-一般課税-computes
   :invariant "簡易課税 (第三十七条第一項) computes a different return; it must not fall through to this one"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "                 (not= :general regime) :regime-not-general"
   :replace "                 (= :exempt regime) :regime-not-general"}
 
  {:id :shinkoku-the-jurisdiction-gate-is-this-file-s-own-reading
   :invariant "adding a jurisdiction must not widen a pass — 消費税法 第四十五条 reaches [:jp] and nothing else"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "  #{[:jp]})"
   :replace "  #{[:jp] [:us]})"}
 
  {:id :shinkoku-an-unclaimed-entry-was-never-checked
   :invariant "the governor's 第三十条第七項 rules fire only on a claim, so an entry that claimed nothing has an unverified basis"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "    (not= :input-tax-credit (:tax-treatment (:payload record)))"
   :replace "    (= :nothing (:tax-treatment (:payload record)))"}
 
  {:id :shinkoku-a-malformed-登録番号-is-not-checked
   :invariant "taxlaw answering :supported? false is a refusal, not an absence"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "        (false? (:taxlaw/supported? support))"
   :replace "        (nil? (:taxlaw/supported? support))"}
 
  {:id :shinkoku-input-tax-is-debit-normal
   :invariant "a credit to 仮払消費税 reverses the tax; adding it would credit a reversal twice"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "                        (if (= :debit side) amount (- amount))))))"
   :replace "                        amount))))"}
 
  {:id :shinkoku-only-the-input-role-is-input-tax
   :invariant "仮受消費税 is 第二号's side of the identity and must never enter the deduction"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "              (if-not (= :input (:tax-role a))"
   :replace "              (if-not (= :output (:tax-role a))"}
 
  {:id :shinkoku-the-partition-reports-what-it-examined
   :invariant "zero not-checked out of zero examined and out of forty are different answers"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "    {:shinkoku/examined (count rows)"
   :replace "    {:shinkoku/examined 0"}
 
  {:id :shinkoku-the-amounts-sum-rather-than-overwrite
   :invariant "two postings at one rate are two amounts; merge would report only the last"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "(merge-with + acc (:input-tax r))"
   :replace "(merge acc (:input-tax r))"}
 
  {:id :shinkoku-the-unverified-amount-is-the-unverified-one
   :invariant "reporting the checked total under :not-checked-amount would understate the exposure to zero"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "     :shinkoku/not-checked-amount (total not-checked)}))"
   :replace "     :shinkoku/not-checked-amount (total checked)}))"}
 
  {:id :shinkoku-unverified-input-tax-is-not-a-pass
   :invariant "the whole point — an entry whose 第三十条第七項 basis nobody checked must not ride into a :computed return"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "                 (seq (:shinkoku/not-checked basis)) :input-tax-unverified"
   :replace "                 (seq []) :input-tax-unverified"}
 
  {:id :shinkoku-the-join-is-the-actors-own-content-id
   :invariant "取引年月日 is part of the posting's identity; dropping it from the join loses every dated entry's record"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "                          :transaction-date transaction-date"
   :replace "                          :transaction-date nil"}
 
  {:id :shinkoku-only-draft-entries-ever-produced-a-posting
   :invariant ":reconcile and :close-period are not journal entries and must not be joined to one"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "    (when (= :draft-entry op)"
   :replace "    (when (not= :nothing op)"}
 
  {:id :shinkoku-an-empty-book-is-not-a-quiet-quarter
   :invariant "the evidence floor in the sentence: 空である is said only when the book is empty"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "    (if (zero? (:entry-count ctx))"
   :replace "    (if (pos? (:entry-count ctx))"}
 
  {:id :shinkoku-消費税法-is-not-stamped-on-a-foreign-book
   :invariant "citing a Japanese act on a verdict it cannot reach puts the same mistake in a different key"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "     :shinkoku/provisions (when (not= :unchecked-jurisdiction status)\n                            (mapv :article (:articles provisions)))"
   :replace "     :shinkoku/provisions (mapv :article (:articles provisions))"}
  {:id :advisor-carries-the-tax-treatment-claim
   :invariant "the governor's 第三十条第七項 rules fire only on a proposal claiming :input-tax-credit — an advisor that drops the key makes rules 5 and 6 unreachable through the actor"
-  :file "src/bookkeeping/advisor.cljc"
+  :file "src/bookkeeping/advisor.cljk"
   :find "   :tax-treatment tax-treatment"
   :replace "   :tax-treatment nil"}
  {:id :shinkoku-a-bare-keyword-jurisdiction-normalizes
   :invariant "kotoba.taxlaw accepts :jp and [:jp]; comparing the raw value against read-for silently answers `not read` for a client record that stores the keyword"
-  :file "src/bookkeeping/shinkoku.cljc"
+  :file "src/bookkeeping/shinkoku.cljk"
   :find "                 (not (contains? read-for (if (vector? jurisdiction)\n                                            jurisdiction\n                                            (when (some? jurisdiction) [jurisdiction]))))"
   :replace "                 (not (contains? read-for jurisdiction))"}
 
@@ -598,19 +598,19 @@
 
  {:id :the-civil-code-proviso-is-reachable
   :invariant "民法 第百四十三条第二項但書 — no corresponding day means the month's last day"
-  :file "src/bookkeeping/houjinzei.cljc"
+  :file "src/bookkeeping/houjinzei.cljk"
   :find "corresponding? (<= d (days-in-month y2 m2))"
   :replace "corresponding? true"}
 
  {:id :a-ledger-supplies-none-of-the-six
   :invariant "第七十四条第一項 一〜六 are all unsupplied; claiming one is a silent wrong return"
-  :file "src/bookkeeping/houjinzei.cljc"
+  :file "src/bookkeeping/houjinzei.cljk"
   :find ":name \"当該事業年度の課税標準である所得の金額又は欠損金額\"\n    :supplied? false"
   :replace ":name \"当該事業年度の課税標準である所得の金額又は欠損金額\"\n    :supplied? true"}
 
  {:id :statements-that-are-short-are-not-attachments
   :invariant "a balance sheet missing an account still balances; it is not an attachment"
-  :file "src/bookkeeping/houjinzei.cljc"
+  :file "src/bookkeeping/houjinzei.cljk"
   :find "                 (not (:houjinzei/whole? att)) :attachments-not-whole"
   :replace "                 false :attachments-not-whole"}
 
@@ -621,18 +621,18 @@
 
  {:id :nobody-declared-is-not-nobody-needed
   :invariant "a client that declared no 第四条第一項 measure is not conformant"
-  :file "src/bookkeeping/hozon.cljc"
+  :file "src/bookkeeping/hozon.cljk"
   :find "                 (nil? measure) :measure-not-declared"
   :replace "                 false :measure-not-declared"}
 
  {:id :an-unrecognised-measure-is-not-one-of-the-four
   :invariant "第四条第一項 lists four; anything else is refused, not accepted"
-  :file "src/bookkeeping/hozon.cljc"
+  :file "src/bookkeeping/hozon.cljk"
   :find "                 (not (true? (recognised? path measure))) :measure-not-recognised"
   :replace "                 false :measure-not-recognised"}
 
  {:id :a-declaration-is-not-the-measure
   :invariant "a measure with no evidence behind it satisfies a keyword, not the article"
-  :file "src/bookkeeping/hozon.cljc"
+  :file "src/bookkeeping/hozon.cljk"
   :find "                 (seq ev-problems) :measure-unevidenced"
   :replace "                 false :measure-unevidenced"}]
