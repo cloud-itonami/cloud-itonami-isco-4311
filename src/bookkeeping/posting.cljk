@@ -152,9 +152,13 @@
   two different entries, so if this ever needs to resist an adversary it must
   be replaced with a real digest, not widened."
   [^String s]
+  ;; per platform only in how a char becomes a number and how the 32-bit
+  ;; multiply wraps: cljs `(int c)` of a one-char string is 0 and a JS double
+  ;; product loses the low bits past 2^53, so every id collided on JS
   (reduce (fn [h c]
-            (let [h (bit-xor h (bit-and (int c) 0xff))]
-              (bit-and (* h 16777619) 0xffffffff)))
+            (let [h (bit-xor h (bit-and #?(:clj (int c) :cljs (.charCodeAt c 0)) 0xff))]
+              #?(:clj (bit-and (* h 16777619) 0xffffffff)
+                 :cljs (unsigned-bit-shift-right (js/Math.imul h 16777619) 0))))
           2166136261
           (seq s)))
 
