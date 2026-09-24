@@ -3,7 +3,7 @@
   the answer.
 
   Most of this file is about what the namespace will NOT say."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.lang.text :as str]
             [bookkeeping.posting :as posting]
             [bookkeeping.shohizei :as sz]))

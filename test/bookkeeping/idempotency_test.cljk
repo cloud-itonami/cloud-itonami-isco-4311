@@ -7,7 +7,7 @@
   `(or entry-id source-doc)`, which is wrong from both sides — a retry of one
   entry collided with itself, and two different entries citing one receipt
   collided with each other."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [bookkeeping.store :as store]
             [bookkeeping.posting :as posting]
             [bookkeeping.trial-balance :as tb]

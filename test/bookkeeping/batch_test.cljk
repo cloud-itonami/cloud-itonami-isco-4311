@@ -3,7 +3,7 @@
 
   1. It collapses many outcomes into one status.
   2. It is silent about whether a retry wrote anything."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [bookkeeping.store :as store]
             [bookkeeping.edge.endpoints :as e]))
 

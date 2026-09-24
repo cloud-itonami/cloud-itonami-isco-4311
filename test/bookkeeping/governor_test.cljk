@@ -1,5 +1,5 @@
 (ns bookkeeping.governor-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [bookkeeping.store :as store]
             [bookkeeping.governor :as governor]))
 

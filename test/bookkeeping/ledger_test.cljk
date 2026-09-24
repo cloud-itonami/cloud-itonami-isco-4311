@@ -12,7 +12,7 @@
   2. **Something reads the postings back.** Until `bookkeeping.trial-balance`
      there was no way to ask what an account's balance was, which is the one
      question a ledger exists to answer."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [bookkeeping.store :as store]
             [bookkeeping.actor :as actor]
             [bookkeeping.posting :as posting]

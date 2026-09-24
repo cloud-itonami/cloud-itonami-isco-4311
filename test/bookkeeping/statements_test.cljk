@@ -6,7 +6,7 @@
   nothing calls is the same shape as a projection nothing invokes, which
   this repo shipped once already — so the first test here is about the
   ENDPOINT, not the namespace."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [bookkeeping.store :as store]
             [bookkeeping.statements :as statements]
             [bookkeeping.edge.endpoints :as e]))
