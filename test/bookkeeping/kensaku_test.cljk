@@ -6,7 +6,7 @@
   then （１）（２）（３） one at a time, then what the deployment may claim.
   A search that ran over `:source-doc` and `:lines` alone would have passed
   its own tests and satisfied none of the provision."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.lang.text :as str]
             [bookkeeping.posting :as posting]
             [bookkeeping.motochou :as mc]

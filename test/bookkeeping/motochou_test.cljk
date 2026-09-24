@@ -1,5 +1,5 @@
 (ns bookkeeping.motochou-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [bookkeeping.posting :as posting]
             [bookkeeping.motochou :as mc]
             [bookkeeping.store]

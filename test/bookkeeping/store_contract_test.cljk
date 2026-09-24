@@ -13,7 +13,7 @@
   would not raise an error — it would produce a different balance sheet.
   Silent, and authoritative-looking. Order and scoping are therefore
   asserted directly rather than through counts."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [bookkeeping.store :as store]
             [bookkeeping.posting :as posting]
             [bookkeeping.trial-balance :as tb]))

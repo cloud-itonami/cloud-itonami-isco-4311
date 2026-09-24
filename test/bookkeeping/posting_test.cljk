@@ -7,7 +7,7 @@
   double-entry contract `kotoba-lang/kakeibo` was already using.
 
   The first test below is the reason this is a fix and not a refactor."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.banking :as banking]
             [bookkeeping.store :as store]
             [bookkeeping.posting :as posting]

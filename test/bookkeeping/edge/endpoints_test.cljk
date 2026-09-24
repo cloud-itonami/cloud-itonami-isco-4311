@@ -6,7 +6,7 @@
   3. It reports an empty answer as a good one.
 
   Every test here is one of those."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [bookkeeping.store :as store]
             [bookkeeping.edge.endpoints :as e]))
 

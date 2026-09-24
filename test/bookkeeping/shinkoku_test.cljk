@@ -4,7 +4,7 @@
   Most of this file is about the eight answers that are NOT a pass, and
   about the one hazard the namespace exists for: input tax credited on an
   entry nobody checked against 消費税法 第三十条第七項."
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [kotoba.test :refer [deftest is testing]]
             [kotoba.lang.text :as str]
             [bookkeeping.actor :as actor]
             [bookkeeping.posting :as posting]
