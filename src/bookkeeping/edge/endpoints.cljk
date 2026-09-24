@@ -658,7 +658,7 @@
        (persistent!
         (reduce (fn [acc pair] (assoc! acc (aget pair 0) (aget pair 1)))
                 (transient {})
-                (es6-iterator-seq (.entries (.-searchParams url))))))))
+                (seq (js/Array.from (.entries (.-searchParams url)))))))))
 
 #?(:cljs
    (defn on-request-get-search

@@ -1,0 +1,35 @@
+;; What this vertical's robot physically does, declared for
+;; kotoba.robotics.process (kotoba-lang/robotics). `kbb -M:physics` runs it.
+;;
+;; README: ISCO 4311 (Accounting and Bookkeeping Clerks) is a Wave 0
+;; (cognitive substrate) occupation with no robotics gate -- the actor
+;; drafts journal entries against registered source documents. The physical
+;; work that remains is the paper those source documents are: a robot
+;; lifts boxes of receipts / vouchers onto archive shelving (paper records
+;; are kept for the statutory retention period) and carries them between
+;; the bookkeeping desk and the records store.
+;;
+;; Every number without a cited source is marked `estimate` in its :basis.
+;; Replacing an estimate with a sourced value is this bot's growth work.
+{:physics/schema "itonami.physical-ai.spec.v1"
+ :repo "cloud-itonami/cloud-itonami-isco-4311"
+ :cases
+ [{:id :voucher-box-to-archive-shelf
+   :kind :manipulator
+   :procedure "arm lifts a box of receipts and vouchers from the scanning desk onto an archive shelf"
+   :params {:l1-m 0.50 :l2-m 0.45 :m1-kg 4.5 :m2-kg 3.0
+            :from [0.60 0.10] :to [0.25 0.80] :duration-s 3.0 :steps 500}
+   :sweep {:param :payload-kg :values [1.0 3.0 6.0 9.0 12.0]}
+   :quantity :peak-tau1-nm
+   :limit {:max 90.0 :basis "estimate: continuous shoulder torque of a ~10 kg-payload collaborative arm"}
+   :boundary {:lo 0.1 :hi 30.0}}
+  {:id :records-box-to-store
+   :kind :transport
+   :procedure "courier robot carries a box of source documents from the bookkeeping desk to the records store"
+   :params {:mass-kg 50.0 :payload-kg 12.0 :v-max-mps 1.0 :a-max-mps2 0.5
+            :brake-decel-mps2 0.8 :drive-force-n 100.0 :crr 0.02
+            :cog-height-m 0.55 :support-half-length-m 0.25}
+   :sweep {:param :distance-m :values [15.0 30.0 60.0 90.0 120.0]}
+   :quantity :cycle-time-s
+   :limit {:max 90.0 :basis "estimate: one office-floor leg budget so a month-end close retrieval is not blocked on the courier"}
+   :boundary {:lo 5.0 :hi 300.0}}]}
