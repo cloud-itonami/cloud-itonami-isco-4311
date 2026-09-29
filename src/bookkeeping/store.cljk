@@ -4,7 +4,7 @@
   is the default, deterministic, zero-dep backend; a Datomic/
   kotoba-server-backed implementation can be swapped in without touching
   the actor or governor (itonami actor pattern, ADR-2607011000 /
-  CLAUDE.md Actors section). Modeled on cloud-itonami-isco-2411's
+  AGENTS.md Actors section). Modeled on cloud-itonami-isco-2411's
   accounting.store, with one bookkeeping-specific addition: a SOURCE
   DOCUMENT registry.
 
