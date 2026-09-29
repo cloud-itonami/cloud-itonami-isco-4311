@@ -1,6 +1,6 @@
 (ns bookkeeping.actor
   "BookkeepingActor — the ISCO-08 4311 community bookkeeping actor as a
-  `langgraph.graph/state-graph` (ADR-2607011000 / CLAUDE.md Actors
+  `langgraph.graph/state-graph` (ADR-2607011000 / AGENTS.md Actors
   section). One graph run = one bookkeeping operation request
   (intake → advise → govern → decide → commit/hold, with a
   human-approval interrupt for escalated proposals). No infinite

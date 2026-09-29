@@ -5,7 +5,7 @@
   `:advise` — the Advisor has no notion of client provenance, source-
   document truth or double-entry balance, so this MUST be a separate
   system able to reject a proposal (itonami actor pattern,
-  ADR-2607011000 / CLAUDE.md Actors section). Modeled on
+  ADR-2607011000 / AGENTS.md Actors section). Modeled on
   cloud-itonami-isco-2411's accounting.governor with two
   bookkeeping-specific HARD checks.
 
